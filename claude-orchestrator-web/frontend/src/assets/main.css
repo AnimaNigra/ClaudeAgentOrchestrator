@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; }
+
+body {
+  background: #0f1117;
+  color: #e2e8f0;
+  font-family: 'Consolas', 'Monaco', monospace;
+  margin: 0;
+  height: 100vh;
+  overflow: hidden;
+}

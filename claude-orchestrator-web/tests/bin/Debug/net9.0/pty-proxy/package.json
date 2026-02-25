@@ -1,0 +1,9 @@
+{
+  "name": "pty-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Spawns claude in a PTY and forwards I/O via stdin/stdout",
+  "dependencies": {
+    "node-pty": "^1.0.0"
+  }
+}

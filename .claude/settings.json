@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \":*)",
+      "Bash(pip install -e . -q)",
+      "Bash(pip install textual plyer -q)",
+      "Bash(dotnet build)",
+      "Bash(dotnet new xunit -n ClaudeOrchestrator.Tests -o tests)",
+      "Bash(del \"C:\\\\Personal\\\\Projects\\\\Playground\\\\MasterClaude\\\\claude-orchestrator-web\\\\tests\\\\UnitTest1.cs\")",
+      "Bash(dotnet test --logger \"console;verbosity=normal\")",
+      "Bash(cmd /c \"npm root -g\")",
+      "Bash(node \"C:/Users/nemec/AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/cli.js\" --help)",
+      "Read(//c/Users/nemec/AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/**)",
+      "Bash(python3 -c \":*)",
+      "Bash(node -e \":*)",
+      "Bash(node:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:xtermjs.org)",
+      "Bash(dotnet add ClaudeOrchestrator.csproj package Pty.Net)",
+      "Bash(dotnet search pty)",
+      "WebFetch(domain:www.nuget.org)",
+      "Bash(npm install @xterm/xterm @xterm/addon-fit)",
+      "Bash(npm install)",
+      "Bash(npx vue-tsc --noEmit)",
+      "Bash(npx vite build --mode development)",
+      "Bash(dotnet build tests/)",
+      "Bash(dotnet test tests/)",
+      "Bash(dotnet build --nologo -q)",
+      "Bash(dotnet build --nologo)"
+    ]
+  }
+}

@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>ClaudeOrchestrator</RootNamespace>
+    <SpaRoot>..\frontend\</SpaRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>ClaudeOrchestrator.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <!-- Copy pty-proxy to output directory (exclude from default Content to avoid duplicates) -->
+  <ItemGroup>
+    <Content Remove="pty-proxy\**" />
+    <None Include="pty-proxy\**" CopyToOutputDirectory="PreserveNewest"
+          Exclude="pty-proxy\node_modules\**\*.map;pty-proxy\node_modules\**\*.md;pty-proxy\node_modules\**\*.ts" />
+  </ItemGroup>
+
+  <!-- Install frontend npm deps if missing -->
+  <Target Name="NpmInstall" BeforeTargets="Build"
+          Condition="!Exists('$(SpaRoot)node_modules')">
+    <Exec WorkingDirectory="$(SpaRoot)" Command="npm install" />
+  </Target>
+
+  <!-- Install pty-proxy deps if missing -->
+  <Target Name="PtyProxyInstall" BeforeTargets="Build"
+          Condition="!Exists('$(MSBuildProjectDirectory)\pty-proxy\node_modules')">
+    <Exec WorkingDirectory="$(MSBuildProjectDirectory)\pty-proxy" Command="npm install" />
+  </Target>
+
+  <!-- Production: build Vue into wwwroot -->
+  <Target Name="BuildFrontend" BeforeTargets="Build"
+          Condition="'$(Configuration)' == 'Release'">
+    <Exec WorkingDirectory="$(SpaRoot)" Command="npm run build" />
+  </Target>
+</Project>
