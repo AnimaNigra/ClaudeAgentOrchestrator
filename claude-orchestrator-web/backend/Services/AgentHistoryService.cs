@@ -38,7 +38,7 @@ public class AgentHistoryService
             Cwd = agent.Cwd,
             SessionId = string.IsNullOrEmpty(agent.SessionId) ? null : agent.SessionId,
             CreatedAt = agent.CreatedAt,
-            FinishedAt = agent.FinishedAt ?? DateTime.UtcNow,
+            FinishedAt = agent.FinishedAt,
             TaskIds = taskIds ?? new List<string>()
         };
 
@@ -54,6 +54,7 @@ public class AgentHistoryService
         finally { _lock.Release(); }
     }
 
+    // Private helpers — must be called from within _lock
     private async Task<List<AgentRecord>> ReadAsync()
     {
         if (!File.Exists(_filePath)) return new List<AgentRecord>();
