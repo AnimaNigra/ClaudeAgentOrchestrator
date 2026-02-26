@@ -31,6 +31,8 @@ public class PtySession : IAsyncDisposable
     private bool _settingsCreatedByUs;
     private string? _originalSettingsContent;
 
+    public Action? OnExited { get; set; }
+
     // State detection
     private readonly StringBuilder _recentText = new(8192);
     private System.Timers.Timer? _idleTimer;
@@ -49,6 +51,10 @@ public class PtySession : IAsyncDisposable
     //   [y/n] / [Y/n] / (y/n) — inline yes/no prompts
     private static readonly Regex IdlePrompt = new(
         @"[│|]\s{0,4}[>›]|❯|\[[Yy]/[Nn]\]|\([Yy]/[Nn]\)",
+        RegexOptions.Compiled);
+
+    private static readonly Regex SessionIdRegex = new(
+        @"--resume\s+([a-zA-Z0-9_-]+)",
         RegexOptions.Compiled);
 
     private static readonly string ProxyScript =
@@ -71,6 +77,11 @@ public class PtySession : IAsyncDisposable
                 $"pty-proxy not found at {ProxyScript}. Run 'npm install' in backend/pty-proxy/.");
 
         var (claudeCmd, claudeArgs) = await ResolveClaudeAsync();
+
+        // If resuming a previous session, append --resume <id>
+        if (!string.IsNullOrEmpty(_agent.ResumeSessionId))
+            claudeArgs = [..claudeArgs, "--resume", _agent.ResumeSessionId];
+
         var nodePath = FindNodeExe();
 
         var psi = new ProcessStartInfo
@@ -136,6 +147,14 @@ public class PtySession : IAsyncDisposable
                 {
                     var text = Encoding.UTF8.GetString(Convert.FromBase64String(base64));
                     FeedStateDetector(text);
+
+                    // Capture Claude Code session ID from exit message (only once)
+                    if (string.IsNullOrEmpty(_agent.SessionId))
+                    {
+                        var match = SessionIdRegex.Match(text);
+                        if (match.Success)
+                            _agent.SessionId = match.Groups[1].Value;
+                    }
                 }
                 catch { /* malformed base64 — ignore */ }
             }
@@ -253,6 +272,7 @@ public class PtySession : IAsyncDisposable
         _forceIdleTimer?.Dispose();
         _agent.Status = AgentStatus.Done;
         _agent.FinishedAt = DateTime.UtcNow;
+        OnExited?.Invoke();
         _ = _emitEvent(_agent.Id, "agent_exited",
             new { agentId = _agent.Id, exitCode = _process?.ExitCode });
     }
