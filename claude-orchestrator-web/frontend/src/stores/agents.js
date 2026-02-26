@@ -146,11 +146,11 @@ export const useAgentsStore = defineStore('agents', () => {
   }
 
   // ── API calls ────────────────────────────────────────
-  async function spawnAgent(name, cwd) {
+  async function spawnAgent(name, cwd, resumeSessionId = null) {
     const res = await fetch('/api/agents', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, cwd: cwd || null }),
+      body: JSON.stringify({ name, cwd: cwd || null, resumeSessionId: resumeSessionId || null }),
     })
     if (!res.ok) {
       const err = await res.json()
