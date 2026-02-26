@@ -21,6 +21,7 @@ public class Agent
     public string SessionId { get; set; } = "";
     public int? Pid { get; set; }
     public string? Cwd { get; set; }
+    public string? ResumeSessionId { get; set; }
 
     public string ElapsedStr
     {
