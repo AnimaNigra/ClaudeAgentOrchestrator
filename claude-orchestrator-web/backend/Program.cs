@@ -21,11 +21,14 @@ builder.Services.AddCors(options =>
               .AllowCredentials());
 });
 builder.Services.AddHttpClient("vite", c => c.BaseAddress = new Uri("http://localhost:5173"));
+builder.Services.AddSingleton<TaskService>();
+builder.Services.AddSingleton<AgentHistoryService>();
 
 builder.Services.AddSingleton<AgentManager>(sp =>
 {
     var hub = sp.GetRequiredService<IHubContext<AgentHub>>();
-    var manager = new AgentManager(maxAgents: 10, orchestratorUrl: $"http://localhost:{port}");
+    var historyService = sp.GetRequiredService<AgentHistoryService>();
+    var manager = new AgentManager(maxAgents: 10, orchestratorUrl: $"http://localhost:{port}", historyService: historyService);
     manager.AddEventListener(async (agentId, eventType, data) =>
     {
         var agent = manager.GetAgent(agentId);

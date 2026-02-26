@@ -24,7 +24,7 @@ public class AgentsController : ControllerBase
     {
         try
         {
-            var agent = await _manager.SpawnAgentAsync(req.Name, req.Cwd);
+            var agent = await _manager.SpawnAgentAsync(req.Name, req.Cwd, req.ResumeSessionId);
             return Ok(agent);
         }
         catch (InvalidOperationException ex)
