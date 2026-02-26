@@ -30,6 +30,10 @@ const containerRef = ref(null)
 // Map of agentId → { terminal, fitAddon }
 const terminals = {}
 
+// Track last PTY dimensions sent per agent — only send resize when they actually change
+// This prevents unnecessary PTY redraws (which falsely trigger the "Running" state) on agent switch
+const lastSentDims = {}
+
 function mountTerminal(agentId, el) {
   if (!el || terminals[agentId]) return
 
@@ -114,8 +118,11 @@ watch(activeAgentId, newId => {
 
 function notifyResize(agentId, fitAddon) {
   const dims = fitAddon.proposeDimensions()
-  if (dims?.cols && dims?.rows)
-    store.resizePty(agentId, dims.cols, dims.rows)
+  if (!dims?.cols || !dims?.rows) return
+  const last = lastSentDims[agentId]
+  if (last?.cols === dims.cols && last?.rows === dims.rows) return
+  lastSentDims[agentId] = { cols: dims.cols, rows: dims.rows }
+  store.resizePty(agentId, dims.cols, dims.rows)
 }
 
 // Resize terminal on container size change
