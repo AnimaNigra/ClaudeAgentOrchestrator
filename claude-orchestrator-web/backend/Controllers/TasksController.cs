@@ -69,9 +69,16 @@ public class TasksController : ControllerBase
             return BadRequest(new { error = "Agent is not available" });
 
         // Send the prompt to the agent (if there is one)
-        if (!string.IsNullOrEmpty(task.Prompt))
+        if (!string.IsNullOrWhiteSpace(task.Prompt))
         {
-            await _agents.WriteInputAsync(req.AgentId, task.Prompt + "\n");
+            try
+            {
+                await _agents.WriteInputAsync(req.AgentId, task.Prompt + "\n");
+            }
+            catch (KeyNotFoundException)
+            {
+                return BadRequest(new { error = "Agent session is not available" });
+            }
         }
 
         // Update task to in-progress
