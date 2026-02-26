@@ -33,6 +33,9 @@
 
     <!-- Command bar -->
     <CommandBar ref="cmdBar" />
+
+    <!-- Permission dialog (rendered via Teleport to body) -->
+    <PermissionDialog />
   </div>
 </template>
 
@@ -42,6 +45,7 @@ import { useAgentsStore } from './stores/agents'
 import AgentCard from './components/AgentCard.vue'
 import TerminalPanel from './components/TerminalPanel.vue'
 import CommandBar from './components/CommandBar.vue'
+import PermissionDialog from './components/PermissionDialog.vue'
 
 const store = useAgentsStore()
 const cmdBar = ref(null)

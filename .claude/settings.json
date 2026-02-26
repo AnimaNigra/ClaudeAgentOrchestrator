@@ -26,7 +26,11 @@
       "Bash(dotnet build tests/)",
       "Bash(dotnet test tests/)",
       "Bash(dotnet build --nologo -q)",
-      "Bash(dotnet build --nologo)"
+      "Bash(dotnet build --nologo)",
+      "Bash(dotnet clean -c Release)",
+      "Bash(dotnet publish -c Release -o ./publish)",
+      "Bash(dotnet publish -c Release)",
+      "Bash(dotnet new gitignore --output c:/Personal/Projects/Playground/MasterClaude)"
     ]
   }
 }

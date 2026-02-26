@@ -57,6 +57,23 @@ function mountTerminal(agentId, el) {
   terminal.loadAddon(fitAddon)
   terminal.open(el)
 
+  // Ctrl+C with selection → copy to clipboard (not SIGINT)
+  // Ctrl+V / Ctrl+Shift+V → paste from clipboard
+  terminal.attachCustomKeyEventHandler(e => {
+    if (e.type !== 'keydown') return true
+    if (e.ctrlKey && e.code === 'KeyC' && terminal.hasSelection()) {
+      navigator.clipboard.writeText(terminal.getSelection()).catch(() => {})
+      return false
+    }
+    if ((e.ctrlKey && e.code === 'KeyV') || (e.ctrlKey && e.shiftKey && e.code === 'KeyV')) {
+      navigator.clipboard.readText().then(text => {
+        if (text) store.sendKeystroke(agentId, text)
+      }).catch(() => {})
+      return false
+    }
+    return true
+  })
+
   // Send typed input to backend → PTY
   terminal.onData(data => {
     store.sendKeystroke(agentId, data)

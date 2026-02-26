@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using ClaudeOrchestrator.Models;
 
@@ -23,12 +24,17 @@ public class PtySession : IAsyncDisposable
 {
     private readonly Agent _agent;
     private readonly Func<string, string, object, Task> _emitEvent;
+    private readonly string _orchestratorUrl;
     private Process? _process;
     private bool _disposed;
+    private string? _injectedSettingsPath;
+    private bool _settingsCreatedByUs;
+    private string? _originalSettingsContent;
 
     // State detection
     private readonly StringBuilder _recentText = new(8192);
     private System.Timers.Timer? _idleTimer;
+    private System.Timers.Timer? _forceIdleTimer;
     private AgentStatus _lastEmittedStatus = AgentStatus.Running;
 
     // Strips most common ANSI/VT escape sequences
@@ -48,10 +54,12 @@ public class PtySession : IAsyncDisposable
     private static readonly string ProxyScript =
         Path.Combine(AppContext.BaseDirectory, "pty-proxy", "index.js");
 
-    public PtySession(Agent agent, Func<string, string, object, Task> emitEvent)
+    public PtySession(Agent agent, Func<string, string, object, Task> emitEvent,
+        string orchestratorUrl = "http://localhost:5050")
     {
         _agent = agent;
         _emitEvent = emitEvent;
+        _orchestratorUrl = orchestratorUrl;
     }
 
     // ── Startup ───────────────────────────────────────────────────────────
@@ -87,6 +95,13 @@ public class PtySession : IAsyncDisposable
         psi.EnvironmentVariables["PTY_CWD"]  = _agent.Cwd ?? Directory.GetCurrentDirectory();
         psi.EnvironmentVariables["PTY_COLS"] = "220";
         psi.EnvironmentVariables["PTY_ROWS"] = "50";
+
+        // Hook env vars — picked up by stop.js / pre-tool.js / notification.js
+        psi.EnvironmentVariables["CLAUDE_ORCHESTRATOR_URL"] = _orchestratorUrl;
+        psi.EnvironmentVariables["CLAUDE_AGENT_ID"]         = _agent.Id;
+
+        // Inject .claude/settings.json with hooks into the agent's working directory
+        await InjectHooksAsync(_agent.Cwd ?? Directory.GetCurrentDirectory());
 
         _process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         _process.Exited += OnProcessExited;
@@ -170,37 +185,56 @@ public class PtySession : IAsyncDisposable
 
     private void FeedStateDetector(string text)
     {
-        // Mark as running on any output
-        if (_agent.Status != AgentStatus.Running)
-            _agent.Status = AgentStatus.Running;
-
         lock (_recentText)
         {
+            // Clear buffer when transitioning Idle→Running so old prompts don't match
+            if (_agent.Status != AgentStatus.Running)
+                _recentText.Clear();
+
+            _agent.Status = AgentStatus.Running;
+
             _recentText.Append(text);
             if (_recentText.Length > 8192)
                 _recentText.Remove(0, _recentText.Length - 8192);
         }
 
-        // Debounce: wait for output to stop, then check for idle prompt
+        // Fast path: 800ms debounce + regex check
         if (_idleTimer is null)
         {
             _idleTimer = new System.Timers.Timer(800) { AutoReset = false };
-            _idleTimer.Elapsed += (_, _) => _ = CheckIdleAsync();
+            _idleTimer.Elapsed += (_, _) => _ = CheckIdleAsync(force: false);
         }
         _idleTimer.Stop();
         _idleTimer.Start();
+
+        // Fallback: after 3s of silence always mark idle (handles unrecognised prompts)
+        if (_forceIdleTimer is null)
+        {
+            _forceIdleTimer = new System.Timers.Timer(3000) { AutoReset = false };
+            _forceIdleTimer.Elapsed += (_, _) => _ = CheckIdleAsync(force: true);
+        }
+        _forceIdleTimer.Stop();
+        _forceIdleTimer.Start();
     }
 
-    private async Task CheckIdleAsync()
+    private async Task CheckIdleAsync(bool force = false)
     {
         if (_disposed) return;
 
-        string snapshot;
-        lock (_recentText)
-            snapshot = _recentText.ToString();
+        AgentStatus newStatus;
+        if (force)
+        {
+            newStatus = AgentStatus.Idle;
+        }
+        else
+        {
+            string snapshot;
+            lock (_recentText)
+                snapshot = _recentText.ToString();
 
-        var plain = AnsiStrip.Replace(snapshot, "");
-        var newStatus = IdlePrompt.IsMatch(plain) ? AgentStatus.Idle : AgentStatus.Running;
+            var plain = AnsiStrip.Replace(snapshot, "");
+            newStatus = IdlePrompt.IsMatch(plain) ? AgentStatus.Idle : AgentStatus.Running;
+        }
 
         if (_lastEmittedStatus == newStatus) return;
         _lastEmittedStatus = newStatus;
@@ -216,6 +250,7 @@ public class PtySession : IAsyncDisposable
     {
         if (_disposed) return;
         _idleTimer?.Dispose();
+        _forceIdleTimer?.Dispose();
         _agent.Status = AgentStatus.Done;
         _agent.FinishedAt = DateTime.UtcNow;
         _ = _emitEvent(_agent.Id, "agent_exited",
@@ -233,8 +268,85 @@ public class PtySession : IAsyncDisposable
     {
         _disposed = true;
         _idleTimer?.Dispose();
+        _forceIdleTimer?.Dispose();
         await KillAsync();
         _process?.Dispose();
+        await RemoveHooksAsync();
+    }
+
+    // ── Hooks injection ───────────────────────────────────────────────────
+
+    private async Task InjectHooksAsync(string cwd)
+    {
+        var claudeDir    = Path.Combine(cwd, ".claude");
+        var settingsPath = Path.Combine(claudeDir, "settings.json");
+
+        _injectedSettingsPath = settingsPath;
+        _settingsCreatedByUs  = !File.Exists(settingsPath);
+
+        // Backup original content so we can restore it exactly on dispose
+        if (!_settingsCreatedByUs)
+        {
+            try { _originalSettingsContent = await File.ReadAllTextAsync(settingsPath); }
+            catch { _settingsCreatedByUs = true; } // treat as new if unreadable
+        }
+
+        // Parse existing JSON (or start empty) and merge our hooks in
+        var json = _originalSettingsContent is not null
+            ? JsonNode.Parse(_originalSettingsContent) as JsonObject ?? new JsonObject()
+            : new JsonObject();
+
+        if (json["hooks"] is not JsonObject hooksObj)
+        {
+            hooksObj = new JsonObject();
+            json["hooks"] = hooksObj;
+        }
+
+        var url = $"{_orchestratorUrl}/api/agents/{_agent.Id}";
+        AppendHook(hooksObj, "Stop",         $"curl -s -X POST \"{url}/hook/stop\"");
+        AppendHook(hooksObj, "Notification", $"curl -s --data-binary @- -H \"Content-Type: application/json\" \"{url}/hook/notification\"");
+        AppendHook(hooksObj, "PreToolUse",   $"curl -s --data-binary @- -H \"Content-Type: application/json\" \"{url}/hook/pre-tool\"");
+
+        Directory.CreateDirectory(claudeDir);
+        await File.WriteAllTextAsync(settingsPath,
+            json.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static void AppendHook(JsonObject hooksObj, string eventType, string command)
+    {
+        var entry = new JsonObject
+        {
+            ["hooks"] = new JsonArray
+            {
+                new JsonObject { ["type"] = "command", ["command"] = command }
+            }
+        };
+
+        if (hooksObj[eventType] is JsonArray arr)
+            arr.Add(entry);
+        else
+            hooksObj[eventType] = new JsonArray { entry };
+    }
+
+    private async Task RemoveHooksAsync()
+    {
+        if (_injectedSettingsPath is null) return;
+        try
+        {
+            if (_settingsCreatedByUs)
+            {
+                File.Delete(_injectedSettingsPath);
+                var dir = Path.GetDirectoryName(_injectedSettingsPath)!;
+                if (Directory.Exists(dir) && !Directory.EnumerateFileSystemEntries(dir).Any())
+                    Directory.Delete(dir);
+            }
+            else if (_originalSettingsContent is not null)
+            {
+                // Restore file to exact original state
+                await File.WriteAllTextAsync(_injectedSettingsPath, _originalSettingsContent);
+            }
+        }
+        catch { }
     }
 
     // ── Command resolution ────────────────────────────────────────────────

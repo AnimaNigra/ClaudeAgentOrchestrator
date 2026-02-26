@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 using ClaudeOrchestrator.Models;
 using ClaudeOrchestrator.Services;
 
@@ -66,5 +67,53 @@ public class AgentsController : ControllerBase
     {
         var agent = _manager.GetAgent(id);
         return agent is null ? NotFound() : Ok(agent);
+    }
+
+    // ── Claude Code hooks ──────────────────────────────────────────────────
+
+    /// <summary>Called by the Stop hook when Claude finishes a response.</summary>
+    [HttpPost("{id}/hook/stop")]
+    public async Task<IActionResult> HookStop(string id)
+    {
+        await _manager.MarkIdleAsync(id);
+        return Ok();
+    }
+
+    /// <summary>Called by the Notification hook when Claude sends a notification.</summary>
+    [HttpPost("{id}/hook/notification")]
+    public async Task<IActionResult> HookNotification(string id, [FromBody] JsonElement body)
+    {
+        var message = body.TryGetProperty("message", out var m) ? m.GetString() ?? "" : "";
+        await _manager.NotifyAsync(id, message);
+        // Also mark idle — notification usually means Claude is waiting
+        await _manager.MarkIdleAsync(id);
+        return Ok();
+    }
+
+    /// <summary>
+    /// Called by the PreToolUse hook. Blocks until the user approves or denies.
+    /// Returns { approved: bool, reason?: string }.
+    /// </summary>
+    [HttpPost("{id}/hook/pre-tool")]
+    public async Task<IActionResult> HookPreTool(string id, [FromBody] JsonElement body)
+    {
+        var toolName = body.TryGetProperty("tool_name", out var tn) ? tn.GetString() ?? "" : "";
+        object? toolInput = body.TryGetProperty("tool_input", out var ti) ? (object)ti : null;
+
+        var (approved, reason) = await _manager.RequestPermissionAsync(id, toolName, toolInput);
+        // Return format that Claude Code reads directly from hook stdout
+        return Ok(approved
+            ? (object)new { decision = "approve" }
+            : new { decision = "block", reason = reason ?? "User denied this action." });
+    }
+
+    // ── Permission responses (called by frontend) ──────────────────────────
+
+    [HttpPost("{id}/permission/{requestId}")]
+    public IActionResult RespondPermission(
+        string id, string requestId, [FromBody] PermissionRespondRequest req)
+    {
+        _manager.RespondPermission(requestId, req.Approved, req.Reason);
+        return Ok();
     }
 }

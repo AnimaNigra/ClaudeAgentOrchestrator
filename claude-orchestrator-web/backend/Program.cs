@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.SignalR;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var port = builder.Configuration.GetValue<int>("Port", 5050);
+
 builder.Services.AddControllers()
     .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddSignalR()
@@ -13,7 +15,7 @@ builder.Services.AddSignalR()
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
-        policy.WithOrigins("http://localhost:5173", "http://localhost:5050")
+        policy.WithOrigins("http://localhost:5173", $"http://localhost:{port}")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials());
@@ -23,7 +25,7 @@ builder.Services.AddHttpClient("vite", c => c.BaseAddress = new Uri("http://loca
 builder.Services.AddSingleton<AgentManager>(sp =>
 {
     var hub = sp.GetRequiredService<IHubContext<AgentHub>>();
-    var manager = new AgentManager(maxAgents: 10);
+    var manager = new AgentManager(maxAgents: 10, orchestratorUrl: $"http://localhost:{port}");
     manager.AddEventListener(async (agentId, eventType, data) =>
     {
         var agent = manager.GetAgent(agentId);
@@ -59,7 +61,7 @@ if (app.Environment.IsDevelopment())
         try { await waitClient.GetAsync("http://localhost:5173"); break; }
         catch { await Task.Delay(1000); }
     }
-    Console.WriteLine("Vite ready — app at http://localhost:5050");
+    Console.WriteLine($"Vite ready — app at http://localhost:{port}");
 
     // Proxy all non-API/hub requests to Vite
     app.Use(async (context, next) =>
@@ -120,4 +122,4 @@ app.MapHub<AgentHub>("/hubs/agents");
 app.Services.GetRequiredService<IHostApplicationLifetime>()
     .ApplicationStopping.Register(() => { try { viteProcess?.Kill(entireProcessTree: true); } catch { } });
 
-app.Run("http://localhost:5050");
+app.Run($"http://localhost:{port}");

@@ -6,6 +6,8 @@ export const useAgentsStore = defineStore('agents', () => {
   const agents = ref({})        // id → agent object
   const activeAgentId = ref(null)
   const connected = ref(false)
+  const pendingPermissions = ref([])  // queue of { requestId, agentId, toolName, toolInput }
+  const alwaysAllowedTools = ref(new Set())
 
   let connection = null
 
@@ -29,10 +31,10 @@ export const useAgentsStore = defineStore('agents', () => {
   // We create it lazily on first keydown/click, then reuse it.
   let _audioCtx = null
 
-  function _ensureAudio() {
+  async function _ensureAudio() {
     if (!window.AudioContext && !window.webkitAudioContext) return null
     if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)()
-    if (_audioCtx.state === 'suspended') _audioCtx.resume()
+    if (_audioCtx.state === 'suspended') await _audioCtx.resume()
     return _audioCtx
   }
 
@@ -43,9 +45,9 @@ export const useAgentsStore = defineStore('agents', () => {
     window.addEventListener('click', warm, { once: true })
   }
 
-  function playDing() {
+  async function playDing() {
     try {
-      const ctx = _ensureAudio()
+      const ctx = await _ensureAudio()
       if (!ctx) return
       const gain = ctx.createGain()
       gain.connect(ctx.destination)
@@ -64,9 +66,9 @@ export const useAgentsStore = defineStore('agents', () => {
     } catch { /* ignore */ }
   }
 
-  function notifyIdle(agent) {
+  async function notifyIdle(agent) {
     if (!agent) return
-    playDing()
+    await playDing()
     if (Notification.permission === 'granted') {
       new Notification(`⏳ ${agent.name} čeká na vstup`, {
         body: 'Agent potřebuje tvoji odpověď.',
@@ -74,6 +76,10 @@ export const useAgentsStore = defineStore('agents', () => {
       })
     }
   }
+
+  // Tracks which agents have already received an idle notification this session.
+  // Cleared when the agent transitions back to running.
+  const _notifiedIdle = new Set()
 
   // ── SignalR ──────────────────────────────────────────
   async function connect() {
@@ -101,7 +107,26 @@ export const useAgentsStore = defineStore('agents', () => {
           _ptyQueues[agentId].push(data.chunk)
           if (_ptyQueues[agentId].length > 2000) _ptyQueues[agentId].shift()
         }
-      } else if (eventType === 'agent_status_changed' && data?.status === 'idle') {
+      } else if (eventType === 'agent_status_changed') {
+        if (data?.status === 'idle' && !_notifiedIdle.has(agentId)) {
+          _notifiedIdle.add(agentId)
+          notifyIdle(agents.value[agentId])
+        } else if (data?.status === 'running') {
+          _notifiedIdle.delete(agentId)
+        }
+      } else if (eventType === 'permission_request') {
+        if (alwaysAllowedTools.value.has(data.toolName)) {
+          fetch(`/api/agents/${agentId}/permission/${data.requestId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ approved: true }),
+          })
+        } else {
+          const wasEmpty = pendingPermissions.value.length === 0
+          pendingPermissions.value.push(data)
+          if (wasEmpty) notifyIdle(agents.value[agentId]) // notify only on first in queue
+        }
+      } else if (eventType === 'agent_notification') {
         notifyIdle(agents.value[agentId])
       } else if (eventType === 'agent_killed' || eventType === 'agent_exited') {
         // Remove from list after a brief pause so user sees the Done state
@@ -154,12 +179,16 @@ export const useAgentsStore = defineStore('agents', () => {
     await fetch(`/api/agents/${agentId}`, { method: 'DELETE' })
   }
 
+  function addAlwaysAllowed(toolName) {
+    alwaysAllowedTools.value.add(toolName)
+  }
+
   const agentList = computed(() => Object.values(agents.value))
 
   return {
-    agents, activeAgentId, connected,
+    agents, activeAgentId, connected, pendingPermissions, alwaysAllowedTools,
     agentList,
     connect, spawnAgent, sendKeystroke, resizePty, killAgent,
-    registerPtyHandler,
+    registerPtyHandler, addAlwaysAllowed,
   }
 })
