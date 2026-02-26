@@ -11,11 +11,14 @@ public class AgentManager : IAsyncDisposable
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly int _maxAgents;
     public readonly string OrchestratorUrl;
+    private readonly AgentHistoryService? _historyService;
 
-    public AgentManager(int maxAgents = 10, string orchestratorUrl = "http://localhost:5050")
+    public AgentManager(int maxAgents = 10, string orchestratorUrl = "http://localhost:5050",
+        AgentHistoryService? historyService = null)
     {
         _maxAgents = maxAgents;
         OrchestratorUrl = orchestratorUrl;
+        _historyService = historyService;
     }
 
     public void AddEventListener(Func<string, string, object, Task> listener)
@@ -87,13 +90,17 @@ public class AgentManager : IAsyncDisposable
             tcs.TrySetResult((approved, reason));
     }
 
-    public async Task<Agent> SpawnAgentAsync(string name, string? cwd = null)
+    public async Task<Agent> SpawnAgentAsync(string name, string? cwd = null, string? resumeSessionId = null)
     {
         await _lock.WaitAsync();
         try
         {
-            var agent = new Agent { Name = name, Cwd = cwd };
+            var agent = new Agent { Name = name, Cwd = cwd, ResumeSessionId = resumeSessionId };
             var session = new PtySession(agent, EmitEventAsync, OrchestratorUrl);
+
+            // Wire up history persistence on natural exit
+            if (_historyService is not null)
+                session.OnExited = () => _ = _historyService.SaveAgentAsync(agent);
 
             _agents[agent.Id] = agent;
             _sessions[agent.Id] = session;
@@ -142,6 +149,8 @@ public class AgentManager : IAsyncDisposable
         {
             agent.Status = AgentStatus.Done;
             agent.FinishedAt = DateTime.UtcNow;
+            if (_historyService is not null)
+                await _historyService.SaveAgentAsync(agent);
             await EmitEventAsync(agentId, "agent_killed", new { });
         }
     }
