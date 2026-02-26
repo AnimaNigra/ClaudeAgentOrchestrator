@@ -31,8 +31,13 @@ public class TaskService
 
     public async Task<TaskItem?> GetByIdAsync(string id)
     {
-        var tasks = await GetAllAsync();
-        return tasks.FirstOrDefault(t => t.Id == id);
+        await _lock.WaitAsync();
+        try
+        {
+            var tasks = await ReadAsync();
+            return tasks.FirstOrDefault(t => t.Id == id);
+        }
+        finally { _lock.Release(); }
     }
 
     public async Task<TaskItem> CreateAsync(CreateTaskRequest req)
@@ -68,7 +73,8 @@ public class TaskService
             existing.Title = req.Title;
             existing.Description = req.Description;
             existing.Prompt = req.Prompt;
-            existing.Status = req.Status;
+            if (req.Status is not null)
+                existing.Status = req.Status;
             existing.AgentId = req.AgentId;
             existing.AgentName = req.AgentName;
             existing.UpdatedAt = DateTime.UtcNow;

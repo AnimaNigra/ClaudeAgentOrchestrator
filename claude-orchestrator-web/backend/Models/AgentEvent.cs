@@ -16,7 +16,7 @@ public record UpdateTaskRequest(
     string Title,
     string? Description = null,
     string? Prompt = null,
-    string Status = "todo",
+    string? Status = null,
     string? AgentId = null,
     string? AgentName = null);
 
