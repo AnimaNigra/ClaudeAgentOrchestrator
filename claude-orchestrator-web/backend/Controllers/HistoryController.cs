@@ -1,3 +1,4 @@
+using ClaudeOrchestrator.Models;
 using ClaudeOrchestrator.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -20,5 +21,21 @@ public class HistoryController : ControllerBase
     {
         var records = await _history.GetAllAsync();
         return Ok(records.OrderByDescending(r => r.FinishedAt));
+    }
+
+    // PATCH /api/history/{id}  — update notes
+    [HttpPatch("{id}")]
+    public async Task<IActionResult> UpdateNotes(string id, [FromBody] UpdateHistoryRequest req)
+    {
+        await _history.UpdateNotesAsync(id, req.Notes);
+        return Ok();
+    }
+
+    // DELETE /api/history/{id}
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(string id)
+    {
+        var deleted = await _history.DeleteAsync(id);
+        return deleted ? NoContent() : NotFound();
     }
 }

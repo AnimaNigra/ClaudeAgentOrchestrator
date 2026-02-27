@@ -9,4 +9,5 @@ public class AgentRecord
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? FinishedAt { get; set; }
     public List<string> TaskIds { get; set; } = new();
+    public string? Notes { get; set; }
 }

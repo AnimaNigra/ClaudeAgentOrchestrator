@@ -29,7 +29,6 @@ public class PtySession : IAsyncDisposable
     private bool _disposed;
     private string? _injectedSettingsPath;
     private bool _settingsCreatedByUs;
-    private string? _originalSettingsContent;
 
     public Action? OnExited { get; set; }
 
@@ -38,6 +37,9 @@ public class PtySession : IAsyncDisposable
     private System.Timers.Timer? _idleTimer;
     private System.Timers.Timer? _forceIdleTimer;
     private AgentStatus _lastEmittedStatus = AgentStatus.Running;
+    // After a PTY resize we suppress state-detection for 800ms so the terminal
+    // redraw doesn't falsely flip an idle agent to Running.
+    private long _resizeGraceUntilTick = 0;
 
     // Strips most common ANSI/VT escape sequences
     // Order matters: try CSI and OSC before the catch-all single-char alternative
@@ -196,6 +198,8 @@ public class PtySession : IAsyncDisposable
     public async Task ResizeAsync(int cols, int rows)
     {
         if (_process is null || _process.HasExited) return;
+        // Suppress state detection for 800ms after resize to ignore the redraw burst
+        Volatile.Write(ref _resizeGraceUntilTick, Environment.TickCount64 + 800);
         await _process.StandardInput.WriteLineAsync($"RESIZE:{cols}x{rows}");
         await _process.StandardInput.FlushAsync();
     }
@@ -204,6 +208,10 @@ public class PtySession : IAsyncDisposable
 
     private void FeedStateDetector(string text)
     {
+        // Suppress during post-resize grace period so redraw bursts don't flip Idle→Running
+        if (Environment.TickCount64 <= Volatile.Read(ref _resizeGraceUntilTick))
+            return;
+
         lock (_recentText)
         {
             // Clear buffer when transitioning Idle→Running so old prompts don't match
@@ -273,6 +281,7 @@ public class PtySession : IAsyncDisposable
         _agent.Status = AgentStatus.Done;
         _agent.FinishedAt = DateTime.UtcNow;
         OnExited?.Invoke();
+        _ = RemoveHooksAsync();
         _ = _emitEvent(_agent.Id, "agent_exited",
             new { agentId = _agent.Id, exitCode = _process?.ExitCode });
     }
@@ -304,17 +313,21 @@ public class PtySession : IAsyncDisposable
         _injectedSettingsPath = settingsPath;
         _settingsCreatedByUs  = !File.Exists(settingsPath);
 
-        // Backup original content so we can restore it exactly on dispose
+        // Parse existing JSON (or start empty) and merge our hooks in
+        JsonObject json;
         if (!_settingsCreatedByUs)
         {
-            try { _originalSettingsContent = await File.ReadAllTextAsync(settingsPath); }
-            catch { _settingsCreatedByUs = true; } // treat as new if unreadable
+            try
+            {
+                var existing = await File.ReadAllTextAsync(settingsPath);
+                json = JsonNode.Parse(existing) as JsonObject ?? new JsonObject();
+            }
+            catch { json = new JsonObject(); _settingsCreatedByUs = true; }
         }
-
-        // Parse existing JSON (or start empty) and merge our hooks in
-        var json = _originalSettingsContent is not null
-            ? JsonNode.Parse(_originalSettingsContent) as JsonObject ?? new JsonObject()
-            : new JsonObject();
+        else
+        {
+            json = new JsonObject();
+        }
 
         if (json["hooks"] is not JsonObject hooksObj)
         {
@@ -353,17 +366,56 @@ public class PtySession : IAsyncDisposable
         if (_injectedSettingsPath is null) return;
         try
         {
-            if (_settingsCreatedByUs)
+            if (!File.Exists(_injectedSettingsPath)) return;
+
+            var currentContent = await File.ReadAllTextAsync(_injectedSettingsPath);
+            var json = JsonNode.Parse(currentContent) as JsonObject ?? new JsonObject();
+
+            // Remove only hooks that belong to this agent (identified by agent ID in the command URL)
+            var agentUrlFragment = $"/api/agents/{_agent.Id}/";
+            if (json["hooks"] is JsonObject hooksObj)
+            {
+                foreach (var key in hooksObj.Select(kv => kv.Key).ToList())
+                {
+                    if (hooksObj[key] is not JsonArray arr) continue;
+
+                    var toKeep = arr
+                        .OfType<JsonObject>()
+                        .Where(entry =>
+                        {
+                            var hooks = entry["hooks"] as JsonArray;
+                            return hooks == null || !hooks.OfType<JsonObject>().Any(h =>
+                                h["command"]?.GetValue<string>()?.Contains(agentUrlFragment) == true);
+                        })
+                        .Select(e => JsonNode.Parse(e.ToJsonString()))
+                        .ToArray();
+
+                    if (toKeep.Length == 0)
+                        hooksObj.Remove(key);
+                    else
+                    {
+                        var newArr = new JsonArray();
+                        foreach (var item in toKeep) newArr.Add(item);
+                        hooksObj[key] = newArr;
+                    }
+                }
+
+                if (!hooksObj.Any())
+                    json.Remove("hooks");
+            }
+
+            // Delete file if now empty and we created it; otherwise write back
+            if (!json.Any() && _settingsCreatedByUs)
             {
                 File.Delete(_injectedSettingsPath);
                 var dir = Path.GetDirectoryName(_injectedSettingsPath)!;
                 if (Directory.Exists(dir) && !Directory.EnumerateFileSystemEntries(dir).Any())
                     Directory.Delete(dir);
             }
-            else if (_originalSettingsContent is not null)
+            else
             {
-                // Restore file to exact original state
-                await File.WriteAllTextAsync(_injectedSettingsPath, _originalSettingsContent);
+                await File.WriteAllTextAsync(_injectedSettingsPath,
+                    json.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
             }
         }
         catch { }

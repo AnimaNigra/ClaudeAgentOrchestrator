@@ -98,9 +98,14 @@ public class AgentManager : IAsyncDisposable
             var agent = new Agent { Name = name, Cwd = cwd, ResumeSessionId = resumeSessionId };
             var session = new PtySession(agent, EmitEventAsync, OrchestratorUrl);
 
-            // Wire up history persistence on natural exit
-            if (_historyService is not null)
-                session.OnExited = () => _ = _historyService.SaveAgentAsync(agent);
+            // Wire up history persistence + cleanup on natural exit
+            session.OnExited = () =>
+            {
+                _agents.Remove(agent.Id);
+                _sessions.Remove(agent.Id);
+                if (_historyService is not null)
+                    _ = _historyService.SaveAgentAsync(agent);
+            };
 
             _agents[agent.Id] = agent;
             _sessions[agent.Id] = session;
@@ -140,6 +145,14 @@ public class AgentManager : IAsyncDisposable
     {
         if (_sessions.TryGetValue(agentId, out var session))
         {
+            // Send /exit so Claude Code prints the --resume session ID before we kill it
+            try
+            {
+                await session.WriteInputAsync("/exit\r");
+                await Task.Delay(2000); // give Claude time to print resume instructions
+            }
+            catch { }
+
             await session.KillAsync();
             await session.DisposeAsync();
             _sessions.Remove(agentId);
@@ -151,6 +164,7 @@ public class AgentManager : IAsyncDisposable
             agent.FinishedAt = DateTime.UtcNow;
             if (_historyService is not null)
                 await _historyService.SaveAgentAsync(agent);
+            _agents.Remove(agentId);
             await EmitEventAsync(agentId, "agent_killed", new { });
         }
     }

@@ -4,6 +4,21 @@
 
 * { box-sizing: border-box; }
 
+/* xterm v6 moves the helper textarea to the cursor position (_syncTextArea).
+   Hide all browser UI artifacts (focus ring, caret, text color) that would
+   appear as a second cursor on top of xterm's own canvas cursor. */
+.xterm-helper-textarea {
+  caret-color: transparent !important;
+  color: transparent !important;
+  outline: none !important;
+}
+
+/* Always-visible styled scrollbar for the xterm viewport */
+.xterm-viewport::-webkit-scrollbar        { width: 8px; }
+.xterm-viewport::-webkit-scrollbar-track  { background: transparent; }
+.xterm-viewport::-webkit-scrollbar-thumb  { background: #4b5563; border-radius: 4px; }
+.xterm-viewport::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
 body {
   background: #0f1117;
   color: #e2e8f0;

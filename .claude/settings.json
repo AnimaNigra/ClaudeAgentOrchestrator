@@ -30,7 +30,35 @@
       "Bash(dotnet clean -c Release)",
       "Bash(dotnet publish -c Release -o ./publish)",
       "Bash(dotnet publish -c Release)",
-      "Bash(dotnet new gitignore --output c:/Personal/Projects/Playground/MasterClaude)"
+      "Bash(dotnet new gitignore --output c:/Personal/Projects/Playground/MasterClaude)",
+      "Bash(git add docs/plans/2026-02-26-task-dashboard-session-persistence-design.md)",
+      "Bash(git commit:*)",
+      "Bash(git add docs/plans/2026-02-26-task-dashboard-kanban.md)",
+      "Bash(git add claude-orchestrator-web/backend/Models/)",
+      "Bash(git add claude-orchestrator-web/backend/Models/AgentRecord.cs)",
+      "Bash(git add claude-orchestrator-web/backend/Services/TaskService.cs)",
+      "Bash(git add claude-orchestrator-web/backend/Services/TaskService.cs claude-orchestrator-web/backend/Models/AgentEvent.cs)",
+      "Bash(git add claude-orchestrator-web/backend/Services/AgentHistoryService.cs)",
+      "Bash(git add claude-orchestrator-web/backend/Services/PtySession.cs)",
+      "Bash(git add claude-orchestrator-web/backend/Services/AgentManager.cs)",
+      "Bash(git add claude-orchestrator-web/frontend/src/components/TerminalPanel.vue)",
+      "Bash(git add claude-orchestrator-web/backend/Controllers/TasksController.cs)",
+      "Bash(git add claude-orchestrator-web/backend/Controllers/HistoryController.cs)",
+      "Bash(git add claude-orchestrator-web/backend/Program.cs claude-orchestrator-web/backend/Controllers/AgentsController.cs)",
+      "Bash(npm install vue-router@4)",
+      "Bash(npm run build)",
+      "Bash(git add claude-orchestrator-web/frontend/src/router/ claude-orchestrator-web/frontend/src/main.js claude-orchestrator-web/frontend/src/views/ claude-orchestrator-web/frontend/package.json claude-orchestrator-web/frontend/package-lock.json)",
+      "Bash(git add claude-orchestrator-web/frontend/src/views/AgentsView.vue claude-orchestrator-web/frontend/src/App.vue)",
+      "Bash(git add claude-orchestrator-web/frontend/src/stores/tasks.js)",
+      "Bash(git add claude-orchestrator-web/frontend/src/components/TaskCard.vue)",
+      "Bash(git add claude-orchestrator-web/frontend/src/components/NewTaskModal.vue)",
+      "Bash(git add claude-orchestrator-web/frontend/src/views/TasksView.vue claude-orchestrator-web/frontend/src/components/KanbanColumn.vue claude-orchestrator-web/frontend/src/stores/agents.js)",
+      "Bash(git add claude-orchestrator-web/)",
+      "Read(//c/Personal/Projects/Playground/**)",
+      "Bash(git add .claude/settings.json claude-orchestrator-web/README.md claude-orchestrator-web/backend/Controllers/AgentsController.cs claude-orchestrator-web/backend/Controllers/HistoryController.cs claude-orchestrator-web/backend/Controllers/TasksController.cs claude-orchestrator-web/backend/Models/AgentEvent.cs claude-orchestrator-web/backend/Models/AgentRecord.cs claude-orchestrator-web/backend/Services/AgentHistoryService.cs claude-orchestrator-web/backend/Services/AgentManager.cs claude-orchestrator-web/backend/Services/PtySession.cs claude-orchestrator-web/backend/Services/TaskService.cs claude-orchestrator-web/backend/wwwroot/index.html \"claude-orchestrator-web/frontend/src/App.vue\" \"claude-orchestrator-web/frontend/src/assets/main.css\" \"claude-orchestrator-web/frontend/src/components/TerminalPanel.vue\" \"claude-orchestrator-web/frontend/src/router/index.js\" \"claude-orchestrator-web/frontend/src/stores/agents.js\" \"claude-orchestrator-web/frontend/src/views/HistoryView.vue\" \"docs/plans/2026-02-27-claude-orchestrator-win-design.md\" \"docs/plans/2026-02-27-claude-orchestrator-win-plan.md\")"
+    ],
+    "additionalDirectories": [
+      "c:\\Personal\\Projects\\Playground\\MasterClaude\\docs"
     ]
   }
 }

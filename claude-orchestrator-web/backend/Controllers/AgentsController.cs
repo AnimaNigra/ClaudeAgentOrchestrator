@@ -69,6 +69,35 @@ public class AgentsController : ControllerBase
         return agent is null ? NotFound() : Ok(agent);
     }
 
+    /// <summary>Upload an image file into the agent's working directory and notify the agent.</summary>
+    [HttpPost("{id}/upload")]
+    public async Task<IActionResult> Upload(string id, IFormFile file)
+    {
+        var agent = _manager.GetAgent(id);
+        if (agent is null) return NotFound(new { error = "Agent not found" });
+
+        if (!file.ContentType.StartsWith("image/"))
+            return BadRequest(new { error = "Only image files are supported" });
+
+        var baseDir = agent.Cwd ?? AppContext.BaseDirectory;
+        var tmpDir = Path.Combine(baseDir, "tmp");
+        Directory.CreateDirectory(tmpDir);
+
+        var ext = Path.GetExtension(file.FileName) is { Length: > 0 } e ? e : ".png";
+        var baseName = Path.GetFileNameWithoutExtension(file.FileName);
+        var fileName = $"{baseName}_{DateTime.UtcNow:yyyyMMdd_HHmmss}{ext}";
+        var fullPath = Path.Combine(tmpDir, fileName);
+        var relativePath = $"tmp/{fileName}";
+
+        await using (var stream = System.IO.File.Create(fullPath))
+            await file.CopyToAsync(stream);
+
+        try { await _manager.WriteInputAsync(id, $"{relativePath}\r"); }
+        catch (KeyNotFoundException) { }
+
+        return Ok(new { fileName, path = relativePath });
+    }
+
     // ── Claude Code hooks ──────────────────────────────────────────────────
 
     /// <summary>Called by the Stop hook when Claude finishes a response.</summary>

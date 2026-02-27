@@ -21,3 +21,5 @@ public record UpdateTaskRequest(
     string? AgentName = null);
 
 public record AssignTaskRequest(string AgentId);
+
+public record UpdateHistoryRequest(string? Notes = null);

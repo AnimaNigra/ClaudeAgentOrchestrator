@@ -17,7 +17,7 @@ public class TaskService
     public TaskService(IConfiguration configuration)
     {
         var dataDir = configuration.GetValue<string>("DataDir")
-            ?? Path.Combine(Directory.GetCurrentDirectory(), "data");
+            ?? Path.Combine(AppContext.BaseDirectory, "data");
         Directory.CreateDirectory(dataDir);
         _filePath = Path.Combine(dataDir, "tasks.json");
     }

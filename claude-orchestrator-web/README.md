@@ -35,7 +35,7 @@ Výstup je v `bin/Release/net9.0/publish/`. Spuštění:
 Pro self-contained (bez nutnosti mít nainstalovaný .NET):
 
 ```bash
-dotnet publish -c Release -r win-x64 --self-contained
+dotnet clean; dotnet publish -c Release
 ```
 
 ## Konfigurace portu

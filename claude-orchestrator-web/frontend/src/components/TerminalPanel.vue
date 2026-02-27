@@ -61,22 +61,54 @@ function mountTerminal(agentId, el) {
   terminal.loadAddon(fitAddon)
   terminal.open(el)
 
-  // Ctrl+C with selection → copy to clipboard (not SIGINT)
-  // Ctrl+V / Ctrl+Shift+V → paste from clipboard
+  // Ctrl+C with selection → copy. Ctrl+V → suppress xterm's key handling;
+  // the actual paste is handled by the 'paste' event listener below.
   terminal.attachCustomKeyEventHandler(e => {
     if (e.type !== 'keydown') return true
+
     if (e.ctrlKey && e.code === 'KeyC' && terminal.hasSelection()) {
       navigator.clipboard.writeText(terminal.getSelection()).catch(() => {})
       return false
     }
-    if ((e.ctrlKey && e.code === 'KeyV') || (e.ctrlKey && e.shiftKey && e.code === 'KeyV')) {
-      navigator.clipboard.readText().then(text => {
-        if (text) store.sendKeystroke(agentId, text)
-      }).catch(() => {})
-      return false
-    }
+
+    // Returning false prevents xterm from treating Ctrl+V as a raw key sequence.
+    // The browser still fires a 'paste' event which our listener below handles.
+    if (e.ctrlKey && e.code === 'KeyV') return false
+
     return true
   })
+
+  // Intercept paste before xterm's internal handler (capture: true fires first at target).
+  // stopImmediatePropagation() prevents xterm from also receiving the event → no double-send.
+  terminal.textarea?.addEventListener('paste', async e => {
+    e.preventDefault()
+    e.stopImmediatePropagation()
+
+    try {
+      const items = await navigator.clipboard.read()
+      for (const item of items) {
+        const imageType = item.types.find(t => t.startsWith('image/'))
+        if (imageType) {
+          const blob = await item.getType(imageType)
+          const ext = imageType.split('/')[1] || 'png'
+          const formData = new FormData()
+          formData.append('file', blob, `paste_${Date.now()}.${ext}`)
+          fetch(`/api/agents/${agentId}/upload`, { method: 'POST', body: formData }).catch(() => {})
+          return
+        }
+        if (item.types.includes('text/plain')) {
+          const blob = await item.getType('text/plain')
+          const text = await blob.text()
+          if (text) store.sendKeystroke(agentId, text)
+          return
+        }
+      }
+    } catch {
+      // Fallback: use clipboardData synchronously from the event itself
+      const text = e.clipboardData?.getData('text/plain')
+      if (text) store.sendKeystroke(agentId, text)
+    }
+  }, true /* capture phase */)
 
   // Send typed input to backend → PTY
   terminal.onData(data => {

@@ -91,6 +91,9 @@ export const useAgentsStore = defineStore('agents', () => {
     connection.on('InitialState', (agentList) => {
       agents.value = {}
       for (const a of agentList) agents.value[a.id] = a
+      // Auto-select first agent so the terminal is opened on a visible element
+      if (!activeAgentId.value && agentList.length > 0)
+        activeAgentId.value = agentList[0].id
     })
 
     connection.on('AgentEvent', ({ agentId, eventType, data, agent }) => {
