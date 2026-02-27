@@ -4,6 +4,7 @@ using System.Windows.Input;
 using ClaudeOrchestrator.WPF.Models;
 using ClaudeOrchestrator.WPF.Services;
 using ClaudeOrchestrator.WPF.Views;
+using Microsoft.Toolkit.Uwp.Notifications;
 
 namespace ClaudeOrchestrator.WPF;
 
@@ -57,7 +58,16 @@ public partial class MainWindow : Window
 
     private void OnAgentIdle(string agentId)
     {
+        var agent = _agentManager.Agents.FirstOrDefault(a => a.Id == agentId);
         System.Media.SystemSounds.Asterisk.Play();
+        try
+        {
+            new ToastContentBuilder()
+                .AddText($"⏳ {agent?.Name ?? agentId} čeká na vstup")
+                .AddText("Agent potřebuje tvoji odpověď.")
+                .Show();
+        }
+        catch { }
     }
 
     private async Task<bool> OnPermissionRequested(PermissionRequest req)
