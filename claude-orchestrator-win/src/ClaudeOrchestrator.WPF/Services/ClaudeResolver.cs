@@ -45,6 +45,7 @@ public static class ClaudeResolver
             FileName = fileName,
             Arguments = args,
             RedirectStandardOutput = true,
+            RedirectStandardError = true,   // prevents deadlock when npm emits warnings to stderr
             UseShellExecute = false,
             CreateNoWindow = true,
         })!;

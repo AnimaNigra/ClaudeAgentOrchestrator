@@ -33,15 +33,7 @@ public partial class MainWindow : Window
 
     private void OnAgentStatusChanged(Agent agent, AgentStatus status)
     {
-        Dispatcher.Invoke(() => {
-            // Force ItemsControl to re-evaluate bindings for status label
-            var idx = _agentManager.Agents.IndexOf(agent);
-            if (idx >= 0)
-            {
-                _agentManager.Agents.RemoveAt(idx);
-                _agentManager.Agents.Insert(idx, agent);
-            }
-        });
+        // INotifyPropertyChanged on Agent.Status automatically updates bindings
     }
 
     private void OnAgentExited(Agent agent)
@@ -107,9 +99,11 @@ public partial class MainWindow : Window
     {
         var name = NewAgentInput.Text.Trim();
         if (string.IsNullOrEmpty(name)) return;
+        var cwd = CwdInput.Text.Trim();
+        if (string.IsNullOrEmpty(cwd)) cwd = null;
         NewAgentInput.Clear();
 
-        var agent = await _agentManager.SpawnAsync(name, null);
+        var agent = await _agentManager.SpawnAsync(name, cwd);
         _activeAgent = agent;
         ShowTerminal(agent);
     }

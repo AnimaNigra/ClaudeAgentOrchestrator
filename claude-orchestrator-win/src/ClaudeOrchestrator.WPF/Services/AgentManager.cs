@@ -9,7 +9,7 @@ public class AgentManager
 {
     private readonly string _orchestratorUrl;
     private readonly HistoryService _history;
-    private readonly Dictionary<string, (PtySessionService Session, HooksInjector Injector)> _sessions = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (PtySessionService Session, HooksInjector Injector)> _sessions = new();
 
     public ObservableCollection<Agent> Agents { get; } = new();
 
@@ -63,7 +63,7 @@ public class AgentManager
             Application.Current?.Dispatcher.Invoke(() =>
             {
                 Agents.Remove(agent);
-                _sessions.Remove(agent.Id);
+                _sessions.TryRemove(agent.Id, out _);
             });
 
             AgentExited?.Invoke(agent);

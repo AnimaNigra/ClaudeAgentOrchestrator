@@ -105,7 +105,7 @@ public class PtySessionService : IAsyncDisposable
 
         // Pty.Net 0.1.16-pre: synchronous spawn
         _pty = PtyProvider.Spawn(command, cols, rows, cwd, BackendOptions.Default);
-        _agent.Status = AgentStatus.Running;
+        SetAgentStatusOnUiThread(AgentStatus.Running);
 
         // Hook PTY output -> VtNetCore
         _pty.PtyData += OnPtyData;
@@ -133,8 +133,8 @@ public class PtySessionService : IAsyncDisposable
     private void OnPtyDisconnected(object? sender)
     {
         if (_disposed) return;
-        _agent.Status = AgentStatus.Done;
         _agent.FinishedAt = DateTime.UtcNow;
+        SetAgentStatusOnUiThread(AgentStatus.Done);
         Exited?.Invoke();
     }
 
@@ -165,14 +165,21 @@ public class PtySessionService : IAsyncDisposable
         if (Environment.TickCount64 <= Volatile.Read(ref _resizeGraceUntilTick))
             return;
 
+        bool wasNotRunning;
         lock (_recentText)
         {
-            if (_agent.Status != AgentStatus.Running)
-                _recentText.Clear();
-            _agent.Status = AgentStatus.Running;
+            wasNotRunning = _lastEmittedStatus != AgentStatus.Running;
+            if (wasNotRunning) _recentText.Clear();
             _recentText.Append(text);
             if (_recentText.Length > 8192)
                 _recentText.Remove(0, _recentText.Length - 8192);
+        }
+
+        if (wasNotRunning)
+        {
+            _lastEmittedStatus = AgentStatus.Running;
+            SetAgentStatusOnUiThread(AgentStatus.Running);
+            StatusChanged?.Invoke(AgentStatus.Running);
         }
 
         if (_idleTimer is null)
@@ -205,8 +212,17 @@ public class PtySessionService : IAsyncDisposable
         }
         if (_lastEmittedStatus == newStatus) return;
         _lastEmittedStatus = newStatus;
-        _agent.Status = newStatus;
+        SetAgentStatusOnUiThread(newStatus);
         StatusChanged?.Invoke(newStatus);
+    }
+
+    private void SetAgentStatusOnUiThread(AgentStatus status)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher != null && !dispatcher.CheckAccess())
+            dispatcher.Invoke(() => _agent.Status = status);
+        else
+            _agent.Status = status;
     }
 
     public void Kill() => _pty?.Dispose();
