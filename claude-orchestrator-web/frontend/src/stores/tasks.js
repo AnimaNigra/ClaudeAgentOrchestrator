@@ -37,7 +37,7 @@ export const useTasksStore = defineStore('tasks', () => {
 
   async function updateTask(id, updates) {
     const task = tasks.value.find(t => t.id === id)
-    if (!task) return
+    if (!task) throw new Error('Task not found')
     const res = await fetch(`/api/tasks/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
