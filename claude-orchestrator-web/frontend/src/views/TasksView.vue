@@ -137,8 +137,8 @@ async function handleUpdateTask({ id, title, description, prompt }) {
   try {
     await store.updateTask(id, { title, description, prompt })
     editingTask.value = null
-  } catch {
-    showError('Failed to update task')
+  } catch (e) {
+    showError(e.message ?? 'Failed to update task')
   }
 }
 
