@@ -3,11 +3,18 @@
     <!-- Title + delete button -->
     <div class="flex items-start justify-between gap-2">
       <span class="text-sm font-medium text-white leading-tight">{{ task.title }}</span>
-      <button
-        @click="emit('delete', task.id)"
-        class="text-gray-600 hover:text-red-400 text-xs flex-shrink-0 transition-colors"
-        title="Delete task"
-      >✕</button>
+      <div class="flex gap-1 flex-shrink-0">
+        <button
+          @click="emit('edit', task)"
+          class="text-gray-600 hover:text-blue-400 text-xs transition-colors"
+          title="Edit task"
+        >✎</button>
+        <button
+          @click="emit('delete', task.id)"
+          class="text-gray-600 hover:text-red-400 text-xs transition-colors"
+          title="Delete task"
+        >✕</button>
+      </div>
     </div>
 
     <!-- Description -->
@@ -82,7 +89,7 @@ const props = defineProps({
   agentRecord: { type: Object, default: null },
 })
 
-const emit = defineEmits(['assign', 'mark-done', 'delete', 'resume'])
+const emit = defineEmits(['assign', 'mark-done', 'delete', 'resume', 'edit'])
 
 const promptOpen = ref(false)
 const agentSessionId = computed(() => props.agentRecord?.sessionId ?? null)
