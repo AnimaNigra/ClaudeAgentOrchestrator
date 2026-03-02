@@ -77,16 +77,19 @@ const isEdit = computed(() => props.task !== null)
 const form = ref({ title: '', description: '', prompt: '' })
 const error = ref(null)
 
-watch(() => props.show, (val) => {
-  if (val) {
-    form.value = {
-      title: props.task?.title ?? '',
-      description: props.task?.description ?? '',
-      prompt: props.task?.prompt ?? '',
+watch(
+  [() => props.show, () => props.task],
+  ([show]) => {
+    if (show) {
+      form.value = {
+        title: props.task?.title ?? '',
+        description: props.task?.description ?? '',
+        prompt: props.task?.prompt ?? '',
+      }
+      error.value = null
     }
-    error.value = null
   }
-})
+)
 
 function submit() {
   if (!form.value.title.trim()) {
