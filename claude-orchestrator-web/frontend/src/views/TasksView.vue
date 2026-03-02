@@ -30,6 +30,7 @@
           @mark-done="handleMarkDone"
           @delete="handleDelete"
           @resume="handleResume"
+          @edit="t => editingTask = t"
         />
         <button
           @click="showNewTask = true"
@@ -51,6 +52,7 @@
           @mark-done="handleMarkDone"
           @delete="handleDelete"
           @resume="handleResume"
+          @edit="t => editingTask = t"
         />
       </KanbanColumn>
 
@@ -66,15 +68,18 @@
           @mark-done="handleMarkDone"
           @delete="handleDelete"
           @resume="handleResume"
+          @edit="t => editingTask = t"
         />
       </KanbanColumn>
     </div>
 
     <!-- New Task Modal -->
     <NewTaskModal
-      :show="showNewTask"
-      @close="showNewTask = false"
+      :show="showNewTask || editingTask !== null"
+      :task="editingTask"
+      @close="showNewTask = false; editingTask = null"
       @created="handleCreateTask"
+      @updated="handleUpdateTask"
     />
   </div>
 </template>
@@ -93,6 +98,7 @@ const store = useTasksStore()
 const agentsStore = useAgentsStore()
 
 const showNewTask = ref(false)
+const editingTask = ref(null)
 const toastError = ref(null)
 const agentHistory = ref([])
 
@@ -124,6 +130,15 @@ async function handleCreateTask({ title, description, prompt }) {
     showNewTask.value = false
   } catch {
     showError('Failed to create task')
+  }
+}
+
+async function handleUpdateTask({ id, title, description, prompt }) {
+  try {
+    await store.updateTask(id, { title, description, prompt })
+    editingTask.value = null
+  } catch {
+    showError('Failed to update task')
   }
 }
 
