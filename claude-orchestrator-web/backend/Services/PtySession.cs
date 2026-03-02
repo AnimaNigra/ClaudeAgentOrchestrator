@@ -308,7 +308,7 @@ public class PtySession : IAsyncDisposable
     private async Task InjectHooksAsync(string cwd)
     {
         var claudeDir    = Path.Combine(cwd, ".claude");
-        var settingsPath = Path.Combine(claudeDir, "settings.json");
+        var settingsPath = Path.Combine(claudeDir, "settings.local.json");
 
         _injectedSettingsPath = settingsPath;
         _settingsCreatedByUs  = !File.Exists(settingsPath);

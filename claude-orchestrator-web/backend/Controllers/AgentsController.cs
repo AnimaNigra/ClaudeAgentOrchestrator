@@ -87,15 +87,13 @@ public class AgentsController : ControllerBase
         var baseName = Path.GetFileNameWithoutExtension(file.FileName);
         var fileName = $"{baseName}_{DateTime.UtcNow:yyyyMMdd_HHmmss}{ext}";
         var fullPath = Path.Combine(tmpDir, fileName);
-        var relativePath = $"tmp/{fileName}";
-
         await using (var stream = System.IO.File.Create(fullPath))
             await file.CopyToAsync(stream);
 
-        try { await _manager.WriteInputAsync(id, $"{relativePath}\r"); }
+        try { await _manager.WriteInputAsync(id, $"{fullPath}\r"); }
         catch (KeyNotFoundException) { }
 
-        return Ok(new { fileName, path = relativePath });
+        return Ok(new { fileName, path = fullPath });
     }
 
     // ── Claude Code hooks ──────────────────────────────────────────────────

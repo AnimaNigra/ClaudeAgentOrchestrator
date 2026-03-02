@@ -73,7 +73,7 @@ public class TasksController : ControllerBase
         {
             try
             {
-                await _agents.WriteInputAsync(req.AgentId, task.Prompt + "\r");
+                await _agents.WriteInputAsync(req.AgentId, task.Prompt.TrimEnd() + "\r\n");
             }
             catch (KeyNotFoundException)
             {
