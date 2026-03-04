@@ -6,6 +6,7 @@ export const usePrioritiesStore = defineStore('priorities', () => {
 
   async function load() {
     const res = await fetch('/api/priorities')
+    if (!res.ok) throw new Error('Failed to load priorities')
     items.value = await res.json()
   }
 
@@ -35,16 +36,18 @@ export const usePrioritiesStore = defineStore('priorities', () => {
   }
 
   async function remove(id) {
-    await fetch(`/api/priorities/${id}`, { method: 'DELETE' })
+    const res = await fetch(`/api/priorities/${id}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error('Failed to delete priority')
     items.value = items.value.filter(i => i.id !== id)
   }
 
   async function reorder(reorderList) {
-    await fetch('/api/priorities/reorder', {
+    const res = await fetch('/api/priorities/reorder', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(reorderList),
     })
+    if (!res.ok) throw new Error('Failed to reorder priorities')
   }
 
   return { items, load, create, update, remove, reorder }

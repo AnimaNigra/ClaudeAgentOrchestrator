@@ -49,7 +49,7 @@
           @keydown.enter="saveEdit(item.id)"
           @blur="saveEdit(item.id)"
           class="flex-1 bg-gray-800 text-sm text-white rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-blue-500"
-          ref="editInputRef"
+          :ref="el => { if (el) editInputEl = el }"
         />
 
         <!-- Actions -->
@@ -84,7 +84,7 @@ const store = usePrioritiesStore()
 const newText = ref('')
 const editingId = ref(null)
 const editText = ref('')
-const editInputRef = ref(null)
+let editInputEl = null
 let dragItem = null
 
 async function handleAdd() {
@@ -97,7 +97,7 @@ async function handleAdd() {
 function startEdit(item) {
   editingId.value = item.id
   editText.value = item.text
-  nextTick(() => editInputRef.value?.focus())
+  nextTick(() => editInputEl?.focus())
 }
 
 async function saveEdit(id) {
