@@ -10,7 +10,7 @@
     <span v-else class="status-dot" :title="agent.status">{{ statusIcon }}</span>
     </div>
 
-    <div class="text-xs text-gray-400 truncate mb-1">
+    <div class="text-xs text-gray-400 truncate mb-1" :title="agent.cwd ?? 'default'">
       📁 {{ agent.cwd ?? 'default' }}
     </div>
 
