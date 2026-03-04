@@ -20,6 +20,13 @@
             Tasks
           </RouterLink>
           <RouterLink
+            to="/priorities"
+            class="px-3 py-1 text-xs rounded transition-colors"
+            :class="$route.path === '/priorities' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-700'"
+          >
+            Priorities
+          </RouterLink>
+          <RouterLink
             to="/history"
             class="px-3 py-1 text-xs rounded transition-colors"
             :class="$route.path === '/history' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-700'"
