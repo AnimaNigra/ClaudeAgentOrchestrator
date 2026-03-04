@@ -23,6 +23,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddHttpClient("vite", c => c.BaseAddress = new Uri("http://localhost:5173"));
 builder.Services.AddSingleton<TaskService>();
 builder.Services.AddSingleton<AgentHistoryService>();
+builder.Services.AddSingleton<PriorityService>();
 
 builder.Services.AddSingleton<AgentManager>(sp =>
 {
