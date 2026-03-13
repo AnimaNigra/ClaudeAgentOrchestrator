@@ -17,7 +17,7 @@
     <!-- List -->
     <div class="flex-1 overflow-y-auto px-4 py-2 space-y-1">
       <div
-        v-for="item in store.items"
+        v-for="(item, index) in store.items"
         :key="item.id"
         class="flex items-center gap-2 bg-gray-900 rounded px-3 py-2 group"
         :class="{ 'opacity-50': item.done }"
@@ -26,6 +26,9 @@
         @dragover.prevent
         @drop="onDrop(item)"
       >
+        <!-- Row number -->
+        <span class="text-gray-600 text-xs select-none w-5 text-right flex-shrink-0">{{ index + 1 }}.</span>
+
         <!-- Drag handle -->
         <span class="text-gray-600 cursor-grab select-none text-lg leading-none">⠿</span>
 
