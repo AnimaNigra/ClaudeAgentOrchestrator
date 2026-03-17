@@ -209,7 +209,34 @@ watch(
 )
 
 async function confirm() {
-  // placeholder — confirm logic added in Task 4
+  abortRecognition()
+
+  const text = transcript.value.trim()
+  const file = imageFile.value
+
+  if (text) {
+    store.sendKeystroke(props.agentId, text + '\r')
+  }
+
+  if (file) {
+    const formData = new FormData()
+    formData.append('file', file)
+    try {
+      const res = await fetch(`/api/agents/${props.agentId}/upload`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        error.value = body.error ?? `Chyba nahrávání: HTTP ${res.status}`
+        return  // keep dialog open so user sees the error
+      }
+    } catch (e) {
+      error.value = `Chyba nahrávání: ${e.message}`
+      return
+    }
+  }
+
   emit('close')
 }
 </script>
