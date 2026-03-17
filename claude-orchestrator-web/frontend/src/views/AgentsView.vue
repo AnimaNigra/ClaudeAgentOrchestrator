@@ -15,8 +15,12 @@
     </aside>
 
     <!-- Right: terminal panel -->
-    <main class="flex-1 overflow-hidden bg-black">
+    <main class="relative flex-1 overflow-hidden bg-black">
       <TerminalPanel />
+      <VoiceDictateButton
+        v-if="store.activeAgentId"
+        @open="showVoiceDialog = true"
+      />
     </main>
   </div>
 
@@ -34,9 +38,11 @@ import AgentCard from '../components/AgentCard.vue'
 import TerminalPanel from '../components/TerminalPanel.vue'
 import CommandBar from '../components/CommandBar.vue'
 import PermissionDialog from '../components/PermissionDialog.vue'
+import VoiceDictateButton from '../components/VoiceDictateButton.vue'
 
 const store = useAgentsStore()
 const cmdBar = ref(null)
+const showVoiceDialog = ref(false)
 
 onMounted(() => {
   cmdBar.value?.focus()
