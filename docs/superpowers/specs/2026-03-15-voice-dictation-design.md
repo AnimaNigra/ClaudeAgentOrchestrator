@@ -73,7 +73,7 @@ recognition.interimResults = true  // fire onresult with partial results
 **Behavior:**
 - On open: create new instance with the above config, call `recognition.start()`
   - The browser microphone permission prompt may appear over the open dialog on first use — this is acceptable behavior
-- `onresult`: iterate results; append final results to `transcript`; set `interimText` to the latest interim result
+- `onresult`: iterate results; append final results to `transcript` after running through `normalizeTranscript()`; set `interimText` to the latest interim result
 - `onerror`: set `error`, set `isRecording = false`
 - `onend`: set `isRecording = false`, clear `interimText`
 - **Stop button**: calls `recognition.stop()`, sets `isRecording = false`
@@ -81,6 +81,19 @@ recognition.interimResults = true  // fire onresult with partial results
 - **Cancel**: calls `recognition.abort()` (not `stop()`, to prevent `onend` firing after the dialog has closed), then emits `close`
 - **Image file picker**: `accept="image/*"`, sets `imageFile`
 - **Confirm button**: disabled when both `transcript.trim()` is empty and `imageFile` is null
+
+**Transcript normalization:**
+
+The speech recognition engine applies inverse text normalization (ITN) — it automatically converts spoken numbers to formatted time (`10:30`), currency, etc. This is unwanted for prompt dictation. Every final result is passed through a `normalizeTranscript(text)` function before being appended to `transcript`:
+
+```js
+function normalizeTranscript(text) {
+  // Undo time normalization: "10:30" → "10 30", "1:00" → "1 00"
+  return text.replace(/\b(\d{1,2}):(\d{2})\b/g, '$1 $2')
+}
+```
+
+This function is defined as a module-level utility inside `VoiceDictateDialog.vue`.
 
 **Confirm logic:**
 1. If `transcript.trim()` is non-empty: `store.sendKeystroke(agentId, transcript.trim() + '\r')`
