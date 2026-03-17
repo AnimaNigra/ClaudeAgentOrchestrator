@@ -30,6 +30,7 @@
   <!-- Permission dialog (rendered via Teleport to body) -->
   <PermissionDialog />
   <VoiceDictateDialog
+    v-if="store.activeAgentId"
     :show="showVoiceDialog"
     :agent-id="store.activeAgentId"
     @close="showVoiceDialog = false"
