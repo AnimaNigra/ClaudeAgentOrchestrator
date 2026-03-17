@@ -210,12 +210,19 @@ watch(
 
 async function confirm() {
   abortRecognition()
+  error.value = null
 
   const text = transcript.value.trim()
   const file = imageFile.value
 
   if (text) {
-    store.sendKeystroke(props.agentId, text + '\r')
+    try {
+      await store.sendKeystroke(props.agentId, text + '\r')
+      transcript.value = ''  // prevent double-send if image upload fails and user retries
+    } catch (e) {
+      error.value = `Chyba odeslání: ${e.message}`
+      return
+    }
   }
 
   if (file) {
