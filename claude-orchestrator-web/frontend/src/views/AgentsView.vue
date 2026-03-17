@@ -29,6 +29,11 @@
 
   <!-- Permission dialog (rendered via Teleport to body) -->
   <PermissionDialog />
+  <VoiceDictateDialog
+    :show="showVoiceDialog"
+    :agent-id="store.activeAgentId"
+    @close="showVoiceDialog = false"
+  />
 </template>
 
 <script setup>
@@ -39,6 +44,7 @@ import TerminalPanel from '../components/TerminalPanel.vue'
 import CommandBar from '../components/CommandBar.vue'
 import PermissionDialog from '../components/PermissionDialog.vue'
 import VoiceDictateButton from '../components/VoiceDictateButton.vue'
+import VoiceDictateDialog from '../components/VoiceDictateDialog.vue'
 
 const store = useAgentsStore()
 const cmdBar = ref(null)

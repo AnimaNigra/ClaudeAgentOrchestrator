@@ -2,6 +2,7 @@
   <button
     @click="$emit('open')"
     title="Voice dictation"
+    aria-label="Voice dictation"
     class="absolute bottom-4 right-4 z-10 w-12 h-12 rounded-full bg-gray-800 border border-gray-600 hover:bg-gray-700 hover:border-blue-500 transition-colors flex items-center justify-center shadow-lg"
   >
     <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-gray-300" viewBox="0 0 24 24" fill="currentColor">
