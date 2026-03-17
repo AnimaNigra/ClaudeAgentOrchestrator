@@ -188,7 +188,7 @@ function cancel() {
   emit('close')
 }
 
-// Replace the existing watch with this one that also starts/stops recording:
+// Start/stop recording in sync with dialog visibility.
 watch(
   () => props.show,
   (show) => {
