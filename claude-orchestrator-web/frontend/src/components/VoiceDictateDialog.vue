@@ -111,7 +111,84 @@ const fileInputEl = ref(null)
 
 const canConfirm = computed(() => transcript.value.trim().length > 0 || imageFile.value !== null)
 
-// Reset on open
+function onFileChange(e) {
+  imageFile.value = e.target.files[0] ?? null
+}
+
+// Undo browser ITN: converts "10:30" → "10 30" to prevent spoken numbers
+// being silently reformatted as times.
+function normalizeTranscript(text) {
+  return text.replace(/\b(\d{1,2}):(\d{2})\b/g, '$1 $2')
+}
+
+let recognition = null
+
+function buildRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!SpeechRecognition) {
+    error.value = 'Váš prohlížeč nepodporuje hlasové zadávání. Použijte Chrome nebo Edge.'
+    return null
+  }
+  const r = new SpeechRecognition()
+  r.continuous = true
+  r.interimResults = true
+
+  r.onresult = (event) => {
+    let interim = ''
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const result = event.results[i]
+      if (result.isFinal) {
+        transcript.value += normalizeTranscript(result[0].transcript)
+      } else {
+        interim += result[0].transcript
+      }
+    }
+    interimText.value = interim
+  }
+
+  r.onerror = (event) => {
+    error.value = `Chyba rozpoznávání: ${event.error}`
+    isRecording.value = false
+  }
+
+  r.onend = () => {
+    isRecording.value = false
+    interimText.value = ''
+  }
+
+  return r
+}
+
+function startRecording() {
+  error.value = null
+  recognition = buildRecognition()
+  if (!recognition) return
+  recognition.start()
+  isRecording.value = true
+}
+
+function stopRecording() {
+  if (recognition) {
+    recognition.stop()
+    recognition = null
+  }
+  isRecording.value = false
+}
+
+function abortRecognition() {
+  if (recognition) {
+    recognition.abort()
+    recognition = null
+  }
+  isRecording.value = false
+}
+
+function cancel() {
+  abortRecognition()
+  emit('close')
+}
+
+// Replace the existing watch with this one that also starts/stops recording:
 watch(
   () => props.show,
   (show) => {
@@ -121,27 +198,15 @@ watch(
       imageFile.value = null
       isRecording.value = false
       error.value = null
+      // Reset the native file input so a previously selected file doesn't appear stale on re-open
+      if (fileInputEl.value) fileInputEl.value.value = ''
+      // Start recording automatically
+      startRecording()
+    } else {
+      abortRecognition()
     }
   }
 )
-
-function onFileChange(e) {
-  imageFile.value = e.target.files[0] ?? null
-}
-
-function stopRecording() {
-  // placeholder — speech logic added in Task 3
-  isRecording.value = false
-}
-
-function startRecording() {
-  // placeholder — speech logic added in Task 3
-}
-
-function cancel() {
-  stopRecording()
-  emit('close')
-}
 
 async function confirm() {
   // placeholder — confirm logic added in Task 4
