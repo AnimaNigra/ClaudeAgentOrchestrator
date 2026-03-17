@@ -189,6 +189,7 @@ function cancel() {
 }
 
 // Start/stop recording in sync with dialog visibility.
+// immediate: true ensures auto-start fires even if the dialog is mounted with show already true.
 watch(
   () => props.show,
   (show) => {
@@ -205,7 +206,8 @@ watch(
     } else {
       abortRecognition()
     }
-  }
+  },
+  { immediate: true }
 )
 
 async function confirm() {
