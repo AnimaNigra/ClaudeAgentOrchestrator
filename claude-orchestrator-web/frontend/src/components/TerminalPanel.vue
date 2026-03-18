@@ -66,12 +66,6 @@ function mountTerminal(agentId, el) {
   terminal.attachCustomKeyEventHandler(e => {
     if (e.type !== 'keydown') return true
 
-    // Shift+Enter → newline instead of submit
-    if (e.shiftKey && e.key === 'Enter') {
-      store.sendKeystroke(agentId, '\n')
-      return false
-    }
-
     if (e.ctrlKey && e.code === 'KeyC' && terminal.hasSelection()) {
       navigator.clipboard.writeText(terminal.getSelection()).catch(() => {})
       return false
