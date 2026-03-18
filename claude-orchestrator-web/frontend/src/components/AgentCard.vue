@@ -20,7 +20,14 @@
 
     <div class="flex items-center justify-between mt-2">
       <span class="text-xs text-gray-500">{{ agent.elapsedStr }}</span>
-      <span class="text-xs" :class="statusTextClass">{{ agent.status }}</span>
+      <div class="flex items-center gap-2">
+        <button
+          class="text-[10px] text-gray-500 hover:text-blue-400 px-1.5 py-0.5 rounded hover:bg-gray-700/50 transition-colors"
+          @click.stop="$emit('review', agent.id)"
+          title="Review git changes"
+        >review</button>
+        <span class="text-xs" :class="statusTextClass">{{ agent.status }}</span>
+      </div>
     </div>
 
     <div v-if="agent.progressPct >= 0" class="mt-1">
@@ -35,7 +42,7 @@
 import { computed } from 'vue'
 
 const props = defineProps({ agent: Object, isActive: Boolean })
-defineEmits(['select'])
+defineEmits(['select', 'review'])
 
 const STATUS_ICONS = {
   Running: '🟢', Idle: '🔵', Done: '✅', Error: '🔴', Blocked: '🟡'

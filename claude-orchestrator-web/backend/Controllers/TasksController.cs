@@ -57,6 +57,65 @@ public class TasksController : ControllerBase
         return Ok(new { deleted = true });
     }
 
+    // POST /api/tasks/{id}/upload  — attach image to task
+    [HttpPost("{id}/upload")]
+    public async Task<IActionResult> Upload(string id, IFormFile file)
+    {
+        var task = await _tasks.GetByIdAsync(id);
+        if (task is null) return NotFound(new { error = "Task not found" });
+
+        if (!file.ContentType.StartsWith("image/"))
+            return BadRequest(new { error = "Only image files are supported" });
+
+        var dir = Path.Combine("data", "task-attachments", id);
+        Directory.CreateDirectory(dir);
+
+        var ext = Path.GetExtension(file.FileName) is { Length: > 0 } e ? e : ".png";
+        var fileName = $"{DateTime.UtcNow:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}{ext}";
+        var fullPath = Path.Combine(dir, fileName);
+
+        await using (var stream = System.IO.File.Create(fullPath))
+            await file.CopyToAsync(stream);
+
+        task.Attachments.Add(fullPath);
+        task.UpdatedAt = DateTime.UtcNow;
+        await _tasks.UpdateAttachmentsAsync(id, task.Attachments);
+
+        return Ok(new { fileName, path = fullPath, attachments = task.Attachments });
+    }
+
+    // GET /api/tasks/{id}/attachment?path=...  — serve attachment image
+    [HttpGet("{id}/attachment")]
+    public IActionResult GetAttachment(string id, [FromQuery] string path)
+    {
+        if (string.IsNullOrEmpty(path) || !path.StartsWith(Path.Combine("data", "task-attachments", id)))
+            return BadRequest(new { error = "Invalid path" });
+
+        if (!System.IO.File.Exists(path))
+            return NotFound();
+
+        var contentType = path.EndsWith(".png") ? "image/png" : path.EndsWith(".jpg") || path.EndsWith(".jpeg") ? "image/jpeg" : "image/png";
+        return PhysicalFile(Path.GetFullPath(path), contentType);
+    }
+
+    // DELETE /api/tasks/{id}/attachment?path=...  — remove attachment
+    [HttpDelete("{id}/attachment")]
+    public async Task<IActionResult> DeleteAttachment(string id, [FromQuery] string path)
+    {
+        var task = await _tasks.GetByIdAsync(id);
+        if (task is null) return NotFound(new { error = "Task not found" });
+
+        if (string.IsNullOrEmpty(path) || !path.StartsWith(Path.Combine("data", "task-attachments", id)))
+            return BadRequest(new { error = "Invalid path" });
+
+        task.Attachments.Remove(path);
+        await _tasks.UpdateAttachmentsAsync(id, task.Attachments);
+
+        if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
+
+        return Ok(new { attachments = task.Attachments });
+    }
+
     // POST /api/tasks/{id}/assign  — body: { agentId }
     [HttpPost("{id}/assign")]
     public async Task<IActionResult> Assign(string id, [FromBody] AssignTaskRequest req)
@@ -68,17 +127,38 @@ public class TasksController : ControllerBase
         if (agent is null || agent.Status == AgentStatus.Done || agent.Status == AgentStatus.Error)
             return BadRequest(new { error = "Agent is not available" });
 
-        // Send the prompt to the agent (if there is one)
-        if (!string.IsNullOrWhiteSpace(task.Prompt))
+        // Copy attachments to agent's CWD and build paths for the prompt
+        var attachmentPaths = new List<string>();
+        if (task.Attachments.Count > 0)
         {
-            try
+            var agentTmpDir = Path.Combine(agent.Cwd ?? AppContext.BaseDirectory, "tmp");
+            Directory.CreateDirectory(agentTmpDir);
+
+            foreach (var srcPath in task.Attachments)
             {
-                await _agents.WriteInputAsync(req.AgentId, task.Prompt.TrimEnd() + "\r\n");
+                if (!System.IO.File.Exists(srcPath)) continue;
+                var destPath = Path.Combine(agentTmpDir, Path.GetFileName(srcPath));
+                System.IO.File.Copy(srcPath, destPath, overwrite: true);
+                attachmentPaths.Add(destPath);
             }
-            catch (KeyNotFoundException)
+        }
+
+        // Send attachment paths first — Claude Code attaches them on Enter
+        try
+        {
+            foreach (var path in attachmentPaths)
             {
-                return BadRequest(new { error = "Agent session is not available" });
+                await _agents.WriteInputAsync(req.AgentId, path + "\r");
+                await Task.Delay(300); // let Claude process the attachment
             }
+
+            // Then send the prompt — submits with the attached images
+            if (!string.IsNullOrWhiteSpace(task.Prompt))
+                await _agents.WriteInputAsync(req.AgentId, task.Prompt.TrimEnd() + "\r");
+        }
+        catch (KeyNotFoundException)
+        {
+            return BadRequest(new { error = "Agent session is not available" });
         }
 
         // Update task to in-progress

@@ -3,13 +3,26 @@
     <!-- Toolbar -->
     <div class="flex items-center justify-between px-4 py-2 border-b border-gray-800 flex-shrink-0">
       <span class="text-xs text-gray-500">{{ store.tasks.length }} tasks</span>
-      <button
-        @click="showNewTask = true"
-        class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded transition-colors"
-      >
-        + New Task
-      </button>
+      <div class="flex gap-2">
+        <button
+          @click="showNewTask = true"
+          class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded transition-colors"
+        >
+          + New Task
+        </button>
+        <button
+          @click="showVoiceDialog = true"
+          class="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded transition-colors"
+          title="Voice dictation"
+        >🎤</button>
+      </div>
     </div>
+
+    <VoiceDictateDialog
+      :show="showVoiceDialog"
+      @confirm="onVoiceConfirm"
+      @close="showVoiceDialog = false"
+    />
 
     <!-- Error toast -->
     <div v-if="toastError" class="mx-4 mt-2 flex-shrink-0 bg-red-900/60 border border-red-700 text-red-300 text-xs rounded px-3 py-2">
@@ -77,7 +90,8 @@
     <NewTaskModal
       :show="showNewTask || editingTask !== null"
       :task="editingTask"
-      @close="showNewTask = false; editingTask = null"
+      :prefill="voicePrefill"
+      @close="showNewTask = false; editingTask = null; voicePrefill = null"
       @created="handleCreateTask"
       @updated="handleUpdateTask"
     />
@@ -92,6 +106,7 @@ import { useAgentsStore } from '../stores/agents'
 import TaskCard from '../components/TaskCard.vue'
 import NewTaskModal from '../components/NewTaskModal.vue'
 import KanbanColumn from '../components/KanbanColumn.vue'
+import VoiceDictateDialog from '../components/VoiceDictateDialog.vue'
 
 const router = useRouter()
 const store = useTasksStore()
@@ -101,6 +116,14 @@ const showNewTask = ref(false)
 const editingTask = ref(null)
 const toastError = ref(null)
 const agentHistory = ref([])
+const showVoiceDialog = ref(false)
+const voicePrefill = ref(null)
+
+function onVoiceConfirm(text) {
+  if (!text) return
+  voicePrefill.value = text
+  showNewTask.value = true
+}
 
 // Only Idle and Running agents can receive tasks
 const availableAgents = computed(() =>
@@ -124,18 +147,17 @@ async function loadHistory() {
   } catch { /* ignore */ }
 }
 
-async function handleCreateTask({ title, description, prompt }) {
-  try {
-    await store.createTask(title, description, prompt)
-    showNewTask.value = false
-  } catch {
-    showError('Failed to create task')
-  }
+async function handleCreateTask(task) {
+  // Modal already created the task and uploaded files via API
+  await store.loadTasks()
+  showNewTask.value = false
+  voicePrefill.value = null
 }
 
 async function handleUpdateTask({ id, title, description, prompt }) {
   try {
     await store.updateTask(id, { title, description, prompt })
+    await store.loadTasks()
     editingTask.value = null
   } catch (e) {
     showError(e.message ?? 'Failed to update task')

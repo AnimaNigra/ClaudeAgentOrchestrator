@@ -5,7 +5,8 @@
       <div class="absolute inset-0 bg-black/60" @click="cancel" />
 
       <!-- Dialog -->
-      <div class="relative bg-gray-800 rounded-xl border border-gray-700 w-[640px] max-w-[95vw] mx-4 p-6 flex flex-col gap-4">
+      <div class="relative bg-gray-800 rounded-xl border border-gray-700 w-[640px] max-w-[95vw] mx-4 p-6 flex flex-col gap-4"
+           @paste="onPaste">
         <h2 class="text-base font-semibold text-white flex items-center gap-2">
           <span
             class="inline-block w-2 h-2 rounded-full"
@@ -32,14 +33,15 @@
           <p v-if="interimText" class="text-xs text-gray-500 italic px-1">{{ interimText }}</p>
         </div>
 
-        <!-- Image picker -->
-        <div class="flex flex-col gap-1">
-          <label class="text-xs text-gray-400">Obrázek <span class="text-gray-600">(volitelné)</span></label>
+        <!-- Image picker (agent mode only) -->
+        <div v-if="agentId" class="flex flex-col gap-1">
+          <label class="text-xs text-gray-400">Obrázky <span class="text-gray-600">(volitelné)</span></label>
           <div class="flex items-center gap-2">
             <input
               ref="fileInputEl"
               type="file"
               accept="image/*"
+              multiple
               class="hidden"
               @change="onFileChange"
             />
@@ -49,8 +51,17 @@
             >
               Vybrat obrázek
             </button>
-            <span v-if="imageFile" class="text-xs text-gray-400 truncate max-w-[260px]">{{ imageFile.name }}</span>
-            <button v-if="imageFile" @click="imageFile = null" class="text-xs text-gray-600 hover:text-red-400 transition-colors">✕</button>
+            <span class="text-xs text-gray-600">nebo Ctrl+V</span>
+          </div>
+          <!-- File list -->
+          <div v-if="imageFiles.length" class="flex flex-wrap gap-1 mt-1">
+            <span
+              v-for="(f, i) in imageFiles" :key="i"
+              class="inline-flex items-center gap-1 bg-gray-700/50 text-xs text-gray-400 px-2 py-0.5 rounded"
+            >
+              {{ f.name }}
+              <button @click="removeImage(i)" class="text-gray-600 hover:text-red-400 transition-colors">✕</button>
+            </span>
           </div>
         </div>
 
@@ -95,24 +106,48 @@ import { useAgentsStore } from '../stores/agents'
 
 const props = defineProps({
   show: { type: Boolean, default: false },
-  agentId: { type: String, required: true },
+  agentId: { type: String, default: null },
 })
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'confirm'])
 
 const store = useAgentsStore()
 
 // State
 const transcript = ref('')
 const interimText = ref('')
-const imageFile = ref(null)
+const imageFiles = ref([])
 const isRecording = ref(false)
 const error = ref(null)
 const fileInputEl = ref(null)
 
-const canConfirm = computed(() => transcript.value.trim().length > 0 || imageFile.value !== null)
+const canConfirm = computed(() => transcript.value.trim().length > 0 || imageFiles.value.length > 0)
 
 function onFileChange(e) {
-  imageFile.value = e.target.files[0] ?? null
+  for (const f of e.target.files) {
+    imageFiles.value.push(f)
+  }
+}
+
+function onPaste(e) {
+  if (!props.agentId) return
+  const items = e.clipboardData?.items
+  if (!items) return
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      e.preventDefault()
+      const blob = item.getAsFile()
+      if (blob) {
+        const ext = item.type.split('/')[1] || 'png'
+        const file = new File([blob], `paste_${Date.now()}.${ext}`, { type: item.type })
+        imageFiles.value.push(file)
+      }
+      return
+    }
+  }
+}
+
+function removeImage(index) {
+  imageFiles.value.splice(index, 1)
 }
 
 // Undo browser ITN: converts "10:30" → "10 30" to prevent spoken numbers
@@ -130,6 +165,7 @@ function buildRecognition() {
     return null
   }
   const r = new SpeechRecognition()
+  r.lang = 'cs-CZ'
   r.continuous = true
   r.interimResults = true
 
@@ -152,8 +188,14 @@ function buildRecognition() {
   }
 
   r.onend = () => {
-    isRecording.value = false
     interimText.value = ''
+    // Web Speech API sometimes stops on its own (silence timeout).
+    // Auto-restart unless the user explicitly stopped recording.
+    if (isRecording.value && props.show) {
+      try { r.start() } catch { isRecording.value = false }
+    } else {
+      isRecording.value = false
+    }
   }
 
   return r
@@ -168,11 +210,11 @@ function startRecording() {
 }
 
 function stopRecording() {
+  isRecording.value = false
   if (recognition) {
     recognition.stop()
     recognition = null
   }
-  isRecording.value = false
 }
 
 function abortRecognition() {
@@ -196,7 +238,7 @@ watch(
     if (show) {
       transcript.value = ''
       interimText.value = ''
-      imageFile.value = null
+      imageFiles.value = []
       isRecording.value = false
       error.value = null
       // Reset the native file input so a previously selected file doesn't appear stale on re-open
@@ -215,19 +257,27 @@ async function confirm() {
   error.value = null
 
   const text = transcript.value.trim()
-  const file = imageFile.value
+  const files = [...imageFiles.value]
 
+  // Text-only mode (no agent) — just emit transcript
+  if (!props.agentId) {
+    emit('confirm', text)
+    emit('close')
+    return
+  }
+
+  // Agent mode — send keystroke + upload images
   if (text) {
     try {
       await store.sendKeystroke(props.agentId, text + '\r')
-      transcript.value = ''  // prevent double-send if image upload fails and user retries
+      transcript.value = ''
     } catch (e) {
       error.value = `Chyba odeslání: ${e.message}`
       return
     }
   }
 
-  if (file) {
+  for (const file of files) {
     const formData = new FormData()
     formData.append('file', file)
     try {
@@ -238,7 +288,7 @@ async function confirm() {
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         error.value = body.error ?? `Chyba nahrávání: HTTP ${res.status}`
-        return  // keep dialog open so user sees the error
+        return
       }
     } catch (e) {
       error.value = `Chyba nahrávání: ${e.message}`

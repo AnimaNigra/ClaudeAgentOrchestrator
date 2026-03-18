@@ -9,6 +9,7 @@ public class TaskItem
     public string Status { get; set; } = "todo"; // todo | in-progress | done
     public string? AgentId { get; set; }
     public string? AgentName { get; set; }
+    public List<string> Attachments { get; set; } = [];
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

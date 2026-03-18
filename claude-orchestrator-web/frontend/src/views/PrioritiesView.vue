@@ -12,7 +12,18 @@
         @click="handleAdd"
         class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded transition-colors"
       >+</button>
+      <button
+        @click="showVoiceDialog = true"
+        class="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded transition-colors"
+        title="Voice dictation"
+      >🎤</button>
     </div>
+
+    <VoiceDictateDialog
+      :show="showVoiceDialog"
+      @confirm="onVoiceConfirm"
+      @close="showVoiceDialog = false"
+    />
 
     <!-- List -->
     <div class="flex-1 overflow-y-auto px-4 py-2 space-y-1">
@@ -81,10 +92,17 @@
 <script setup>
 import { ref, nextTick, onMounted } from 'vue'
 import { usePrioritiesStore } from '../stores/priorities'
+import VoiceDictateDialog from '../components/VoiceDictateDialog.vue'
 
 const store = usePrioritiesStore()
 
 const newText = ref('')
+const showVoiceDialog = ref(false)
+
+async function onVoiceConfirm(text) {
+  if (!text) return
+  await store.create(text)
+}
 const editingId = ref(null)
 const editText = ref('')
 let editInputEl = null

@@ -115,6 +115,21 @@ public class TaskService
         finally { _lock.Release(); }
     }
 
+    public async Task UpdateAttachmentsAsync(string taskId, List<string> attachments)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            var tasks = await ReadAsync();
+            var task = tasks.FirstOrDefault(t => t.Id == taskId);
+            if (task is null) return;
+            task.Attachments = attachments;
+            task.UpdatedAt = DateTime.UtcNow;
+            await WriteAsync(tasks);
+        }
+        finally { _lock.Release(); }
+    }
+
     // Private helpers — must be called from within _lock
     private async Task<List<TaskItem>> ReadAsync()
     {

@@ -69,6 +69,16 @@ public class AgentsController : ControllerBase
         return agent is null ? NotFound() : Ok(agent);
     }
 
+    /// <summary>Return git status and diff for the agent's working directory.</summary>
+    [HttpGet("{id}/review")]
+    public async Task<IActionResult> Review(string id, [FromServices] GitReviewService git)
+    {
+        var agent = _manager.GetAgent(id);
+        if (agent is null) return NotFound();
+        var result = await git.GetReviewAsync(agent.Cwd);
+        return Ok(result);
+    }
+
     /// <summary>Upload an image file into the agent's working directory and notify the agent.</summary>
     [HttpPost("{id}/upload")]
     public async Task<IActionResult> Upload(string id, IFormFile file)

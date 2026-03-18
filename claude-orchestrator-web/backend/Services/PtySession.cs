@@ -32,6 +32,9 @@ public class PtySession : IAsyncDisposable
 
     public Action? OnExited { get; set; }
 
+    // Serializes writes to the proxy's stdin (WriteInputAsync + ResizeAsync)
+    private readonly SemaphoreSlim _writeLock = new(1, 1);
+
     // State detection
     private readonly StringBuilder _recentText = new(8192);
     private System.Timers.Timer? _idleTimer;
@@ -190,9 +193,14 @@ public class PtySession : IAsyncDisposable
     public async Task WriteInputAsync(string data)
     {
         if (_process is null || _process.HasExited) return;
-        var b64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(data));
-        await _process.StandardInput.WriteLineAsync($"INPUT:{b64}");
-        await _process.StandardInput.FlushAsync();
+        await _writeLock.WaitAsync();
+        try
+        {
+            var b64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(data));
+            await _process.StandardInput.WriteLineAsync($"INPUT:{b64}");
+            await _process.StandardInput.FlushAsync();
+        }
+        finally { _writeLock.Release(); }
     }
 
     public async Task ResizeAsync(int cols, int rows)
@@ -200,8 +208,13 @@ public class PtySession : IAsyncDisposable
         if (_process is null || _process.HasExited) return;
         // Suppress state detection for 800ms after resize to ignore the redraw burst
         Volatile.Write(ref _resizeGraceUntilTick, Environment.TickCount64 + 800);
-        await _process.StandardInput.WriteLineAsync($"RESIZE:{cols}x{rows}");
-        await _process.StandardInput.FlushAsync();
+        await _writeLock.WaitAsync();
+        try
+        {
+            await _process.StandardInput.WriteLineAsync($"RESIZE:{cols}x{rows}");
+            await _process.StandardInput.FlushAsync();
+        }
+        finally { _writeLock.Release(); }
     }
 
     // ── State detection ───────────────────────────────────────────────────

@@ -80,6 +80,24 @@ select api
 
 Po vytvoření agenta klikni na jeho kartu v levém panelu (nebo použij `select`) a piš přímo do terminálu. Claude Code potvrzovací prompty (`❯ 1. Yes / 2. No`) potvrzuješ stisknutím čísla.
 
+### Hlasové diktování
+
+Každý terminál má plovoucí tlačítko s mikrofonem (vpravo dole). Po kliknutí se otevře dialog, kde:
+
+- Diktujete prompt hlasem (Web Speech API — funguje v Chrome/Edge)
+- Přepis je editovatelný před odesláním
+- Čísla převedená na čas (např. `10:30`) se automaticky normalizují zpět na `10 30`
+- Volitelně přiložíte obrázek (drag & drop nebo file picker)
+- Po kliknutí **Potvrdit** se text + obrázek odešlou přímo aktivnímu agentovi
+
+### Seznam priorit
+
+Záložka **Priorities** (horní navigace) slouží jako rychlý notepad pro úkoly:
+
+- Přidávání, mazání a přeřazování položek drag & drop
+- Inline editace dvojklikem
+- Stav se ukládá do `data/priorities.json` na backendu
+
 ### Notifikace
 
 Při první návštěvě prohlížeč požádá o povolení notifikací. Kdykoli agent přejde do stavu Idle (Claude dokončil odpověď), přehraje se zvukový signál a ukáže se systémová notifikace — funguje i při minimalizovaném okně.
@@ -95,20 +113,25 @@ Pokud uživatel neodpoví do 2 minut, akce se automaticky schválí.
 ```
 Browser
   └─ Vue 3 + Pinia + xterm.js
-      ├─ CommandBar      — správa agentů (create/kill/select)
-      ├─ AgentCard       — stav agenta (Running/Idle/Blocked/Done)
-      ├─ TerminalPanel   — jeden xterm.js terminál per agent
-      └─ PermissionDialog — modální dialog pro PreToolUse schválení
+      ├─ CommandBar        — správa agentů (create/kill/select)
+      ├─ AgentCard         — stav agenta (Running/Idle/Blocked/Done)
+      ├─ TerminalPanel     — jeden xterm.js terminál per agent
+      ├─ PermissionDialog  — modální dialog pro PreToolUse schválení
+      ├─ VoiceDictateButton — plovoucí mikrofon tlačítko v terminálu
+      ├─ VoiceDictateDialog — dialog s přepisem hlasu + přílohou obrázku
+      └─ PrioritiesView    — drag & drop seznam priorit
 
 ASP.NET Core (:5050)
-  ├─ AgentsController — REST API (/api/agents)
+  ├─ AgentsController     — REST API (/api/agents)
   │     ├─ POST /{id}/hook/stop         — Claude dokončil odpověď
   │     ├─ POST /{id}/hook/notification — Claude poslal notifikaci
   │     ├─ POST /{id}/hook/pre-tool     — žádost o schválení nástroje (blokující)
   │     └─ POST /{id}/permission/{rid}  — odpověď uživatele z frontendu
-  ├─ AgentHub         — SignalR real-time events (/hubs/agents)
-  ├─ AgentManager     — správa životního cyklu agentů
-  └─ PtySession       — jeden PTY per agent přes node-pty proxy
+  ├─ PrioritiesController — REST API (/api/priorities) pro správu priorit
+  ├─ AgentHub             — SignalR real-time events (/hubs/agents)
+  ├─ AgentManager         — správa životního cyklu agentů
+  ├─ PtySession           — jeden PTY per agent přes node-pty proxy
+  └─ PriorityService      — CRUD pro priority, ukládá do data/priorities.json
 
 pty-proxy/index.js (Node.js)
   └─ node-pty → ConPTY (Windows) / pty (Linux/macOS)
