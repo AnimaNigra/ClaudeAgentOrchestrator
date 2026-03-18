@@ -266,17 +266,7 @@ async function confirm() {
     return
   }
 
-  // Agent mode — send keystroke + upload images
-  if (text) {
-    try {
-      await store.sendKeystroke(props.agentId, text + '\r')
-      transcript.value = ''
-    } catch (e) {
-      error.value = `Chyba odeslání: ${e.message}`
-      return
-    }
-  }
-
+  // Agent mode — upload images first, then send text
   for (const file of files) {
     const formData = new FormData()
     formData.append('file', file)
@@ -292,6 +282,18 @@ async function confirm() {
       }
     } catch (e) {
       error.value = `Chyba nahrávání: ${e.message}`
+      return
+    }
+  }
+
+  if (text) {
+    try {
+      // Small delay so Claude processes the image attachment first
+      if (files.length) await new Promise(r => setTimeout(r, 500))
+      await store.sendKeystroke(props.agentId, text + '\r')
+      transcript.value = ''
+    } catch (e) {
+      error.value = `Chyba odeslání: ${e.message}`
       return
     }
   }
