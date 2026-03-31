@@ -116,23 +116,39 @@ const router = useRouter()
 const store = useAgentsStore()
 
 const cwdInput = ref('')
-const allWorktrees = ref([])
+// Array of { cwd, worktrees[] } — one entry per scanned repo
+const repoData = ref([])
 const loading = ref(false)
 const error = ref('')
 
 const groups = computed(() => {
-  const main = allWorktrees.value.find(w => w.isMain)
-  if (!main) return []
-
-  return [{
-    mainPath: main.path,
-    branch: main.branch,
-    worktrees: allWorktrees.value.filter(w => !w.isMain),
-  }]
+  return repoData.value
+    .map(repo => {
+      const main = repo.worktrees.find(w => w.isMain)
+      if (!main) return null
+      return {
+        mainPath: main.path,
+        branch: main.branch,
+        worktrees: repo.worktrees.filter(w => !w.isMain),
+      }
+    })
+    .filter(Boolean)
 })
 
 function runningAgentForPath(path) {
-  return store.agentList.find(a => a.cwd === path)
+  return store.agentList.find(a =>
+    a.cwd?.toLowerCase() === path?.toLowerCase())
+}
+
+async function fetchWorktreesForCwd(cwd) {
+  const res = await fetch(`/api/worktree?cwd=${encodeURIComponent(cwd)}`)
+  const text = await res.text()
+  if (!res.ok) {
+    let msg = 'Failed to list worktrees'
+    try { msg = JSON.parse(text).error ?? msg } catch {}
+    throw new Error(msg)
+  }
+  return text ? JSON.parse(text) : []
 }
 
 async function loadWorktrees() {
@@ -140,12 +156,12 @@ async function loadWorktrees() {
   loading.value = true
   error.value = ''
   try {
-    const res = await fetch(`/api/worktree?cwd=${encodeURIComponent(cwdInput.value.trim())}`)
-    if (!res.ok) {
-      const err = await res.json()
-      throw new Error(err.error ?? 'Failed to list worktrees')
-    }
-    allWorktrees.value = await res.json()
+    const worktrees = await fetchWorktreesForCwd(cwdInput.value.trim())
+    // Replace or add this repo's data
+    const idx = repoData.value.findIndex(r =>
+      r.cwd.toLowerCase() === cwdInput.value.trim().toLowerCase())
+    if (idx >= 0) repoData.value[idx] = { cwd: cwdInput.value.trim(), worktrees }
+    else repoData.value.push({ cwd: cwdInput.value.trim(), worktrees })
   } catch (e) {
     error.value = e.message
   } finally {
@@ -181,7 +197,10 @@ function removeWorktree(wt) {
 }
 
 async function doRemove() {
-  const mainCwd = allWorktrees.value.find(w => w.isMain)?.path
+  // Find the main repo path for this worktree
+  const repo = repoData.value.find(r =>
+    r.worktrees.some(w => w.path === removeWt.value.path))
+  const mainCwd = repo?.worktrees.find(w => w.isMain)?.path
   if (!mainCwd) return
   try {
     await fetch(`/api/worktree?cwd=${encodeURIComponent(mainCwd)}&worktreePath=${encodeURIComponent(removeWt.value.path)}&deleteBranch=true`, {
@@ -189,7 +208,10 @@ async function doRemove() {
     })
     removeWt.value = null
     removeError.value = ''
-    await loadWorktrees()
+    // Reload this specific repo
+    const worktrees = await fetchWorktreesForCwd(mainCwd)
+    const idx = repoData.value.indexOf(repo)
+    if (idx >= 0) repoData.value[idx] = { cwd: mainCwd, worktrees }
   } catch (e) {
     removeError.value = e.message
   }
@@ -205,16 +227,18 @@ async function openFolder(path) {
   } catch { /* ignore */ }
 }
 
-// Task 7: Auto-load worktrees for all unique agent CWDs
+// Auto-load worktrees for ALL unique agent CWDs
 onMounted(async () => {
   const cwds = new Set()
   for (const agent of store.agentList) {
     const repoCwd = agent.originalCwd || agent.cwd
     if (repoCwd) cwds.add(repoCwd)
   }
-  if (cwds.size === 1) {
-    cwdInput.value = [...cwds][0]
-    await loadWorktrees()
+  for (const cwd of cwds) {
+    try {
+      const worktrees = await fetchWorktreesForCwd(cwd)
+      repoData.value.push({ cwd, worktrees })
+    } catch { /* skip repos that fail */ }
   }
 })
 </script>

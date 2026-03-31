@@ -43,10 +43,8 @@ public class WorktreeController : ControllerBase
         try
         {
             var (worktreePath, branch) = await _worktree.CreateAsync(req.Cwd, req.Name);
-            var agent = await _manager.SpawnAgentAsync(req.Name, worktreePath);
-            agent.WorktreePath = worktreePath;
-            agent.WorktreeBranch = branch;
-            agent.OriginalCwd = req.Cwd;
+            var agent = await _manager.SpawnAgentAsync(req.Name, worktreePath,
+                worktreePath: worktreePath, worktreeBranch: branch, originalCwd: req.Cwd);
             return Ok(agent);
         }
         catch (InvalidOperationException ex)

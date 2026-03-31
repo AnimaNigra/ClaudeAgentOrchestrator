@@ -90,12 +90,17 @@ public class AgentManager : IAsyncDisposable
             tcs.TrySetResult((approved, reason));
     }
 
-    public async Task<Agent> SpawnAgentAsync(string name, string? cwd = null, string? resumeSessionId = null)
+    public async Task<Agent> SpawnAgentAsync(string name, string? cwd = null, string? resumeSessionId = null,
+        string? worktreePath = null, string? worktreeBranch = null, string? originalCwd = null)
     {
         await _lock.WaitAsync();
         try
         {
-            var agent = new Agent { Name = name, Cwd = cwd, ResumeSessionId = resumeSessionId };
+            var agent = new Agent
+            {
+                Name = name, Cwd = cwd, ResumeSessionId = resumeSessionId,
+                WorktreePath = worktreePath, WorktreeBranch = worktreeBranch, OriginalCwd = originalCwd,
+            };
             var session = new PtySession(agent, EmitEventAsync, OrchestratorUrl);
 
             // Wire up history persistence + cleanup on natural exit

@@ -14,7 +14,7 @@ public class WorktreeService
     /// </summary>
     public async Task<(string worktreePath, string branch)> CreateAsync(string repoPath, string name)
     {
-        var topLevel = (await RunGitAsync(repoPath, "rev-parse --show-toplevel")).Trim();
+        var topLevel = NormalizePath((await RunGitAsync(repoPath, "rev-parse --show-toplevel")).Trim());
         if (string.IsNullOrEmpty(topLevel))
             throw new InvalidOperationException($"Not a git repository: {repoPath}");
 
@@ -35,7 +35,7 @@ public class WorktreeService
     /// <summary>List all worktrees for the given repo.</summary>
     public async Task<List<WorktreeInfo>> ListAsync(string repoPath)
     {
-        var topLevel = (await RunGitAsync(repoPath, "rev-parse --show-toplevel")).Trim();
+        var topLevel = NormalizePath((await RunGitAsync(repoPath, "rev-parse --show-toplevel")).Trim());
         if (string.IsNullOrEmpty(topLevel))
             return new List<WorktreeInfo>();
 
@@ -49,8 +49,11 @@ public class WorktreeService
             if (line.StartsWith("worktree "))
             {
                 if (currentPath is not null)
-                    worktrees.Add(new WorktreeInfo(currentPath, currentBranch ?? "detached",
-                        string.Equals(currentPath, topLevel, StringComparison.OrdinalIgnoreCase)));
+                {
+                    var normalized = NormalizePath(currentPath);
+                    worktrees.Add(new WorktreeInfo(normalized, currentBranch ?? "detached",
+                        string.Equals(normalized, topLevel, StringComparison.OrdinalIgnoreCase)));
+                }
                 currentPath = line[9..];
                 currentBranch = null;
             }
@@ -61,16 +64,23 @@ public class WorktreeService
             }
         }
         if (currentPath is not null)
-            worktrees.Add(new WorktreeInfo(currentPath, currentBranch ?? "detached",
-                string.Equals(currentPath, topLevel, StringComparison.OrdinalIgnoreCase)));
+        {
+            var normalized = NormalizePath(currentPath);
+            worktrees.Add(new WorktreeInfo(normalized, currentBranch ?? "detached",
+                string.Equals(normalized, topLevel, StringComparison.OrdinalIgnoreCase)));
+        }
 
         return worktrees;
     }
 
+    /// <summary>Normalize path separators — git on Windows mixes / and \.</summary>
+    private static string NormalizePath(string path)
+        => path.Replace('/', System.IO.Path.DirectorySeparatorChar);
+
     /// <summary>Remove a worktree and optionally delete its branch.</summary>
     public async Task RemoveAsync(string repoPath, string worktreePath, bool deleteBranch = true)
     {
-        var topLevel = (await RunGitAsync(repoPath, "rev-parse --show-toplevel")).Trim();
+        var topLevel = NormalizePath((await RunGitAsync(repoPath, "rev-parse --show-toplevel")).Trim());
 
         await RunGitAsync(topLevel, $"worktree remove \"{worktreePath}\" --force");
 
