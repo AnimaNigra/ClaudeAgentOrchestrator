@@ -22,6 +22,9 @@ public class Agent
     public int? Pid { get; set; }
     public string? Cwd { get; set; }
     public string? ResumeSessionId { get; set; }
+    public string? WorktreePath { get; set; }
+    public string? WorktreeBranch { get; set; }
+    public string? OriginalCwd { get; set; }
 
     public string ElapsedStr
     {

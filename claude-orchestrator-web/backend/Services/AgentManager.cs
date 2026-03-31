@@ -103,7 +103,7 @@ public class AgentManager : IAsyncDisposable
             {
                 _agents.Remove(agent.Id);
                 _sessions.Remove(agent.Id);
-                if (_historyService is not null)
+                if (_historyService is not null && agent.WorktreePath is null)
                     _ = _historyService.SaveAgentAsync(agent);
             };
 
@@ -162,7 +162,7 @@ public class AgentManager : IAsyncDisposable
         {
             agent.Status = AgentStatus.Done;
             agent.FinishedAt = DateTime.UtcNow;
-            if (_historyService is not null)
+            if (_historyService is not null && agent.WorktreePath is null)
                 await _historyService.SaveAgentAsync(agent);
             _agents.Remove(agentId);
             await EmitEventAsync(agentId, "agent_killed", new { });

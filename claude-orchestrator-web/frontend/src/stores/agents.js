@@ -186,12 +186,25 @@ export const useAgentsStore = defineStore('agents', () => {
     alwaysAllowedTools.value.add(toolName)
   }
 
+  async function createWorktree(name, cwd) {
+    const res = await fetch('/api/worktree', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, cwd }),
+    })
+    if (!res.ok) {
+      const err = await res.json()
+      throw new Error(err.error ?? 'Failed to create worktree')
+    }
+    return res.json()
+  }
+
   const agentList = computed(() => Object.values(agents.value))
 
   return {
     agents, activeAgentId, connected, pendingPermissions, alwaysAllowedTools,
     agentList,
-    connect, spawnAgent, sendKeystroke, resizePty, killAgent,
+    connect, spawnAgent, createWorktree, sendKeystroke, resizePty, killAgent,
     registerPtyHandler, addAlwaysAllowed,
   }
 })

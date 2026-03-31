@@ -106,6 +106,22 @@ public class AgentsController : ControllerBase
         return Ok(new { fileName, path = fullPath });
     }
 
+    /// <summary>Open the agent's working directory in the system file explorer.</summary>
+    [HttpPost("{id}/open-folder")]
+    public IActionResult OpenFolder(string id)
+    {
+        var agent = _manager.GetAgent(id);
+        if (agent is null) return NotFound();
+        var dir = agent.Cwd ?? AppContext.BaseDirectory;
+        if (!Directory.Exists(dir)) return BadRequest(new { error = "Directory does not exist" });
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = dir,
+            UseShellExecute = true,
+        });
+        return Ok();
+    }
+
     // ── Claude Code hooks ──────────────────────────────────────────────────
 
     /// <summary>Called by the Stop hook when Claude finishes a response.</summary>

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
@@ -64,6 +65,10 @@ public class PtySession : IAsyncDisposable
 
     private static readonly string ProxyScript =
         Path.Combine(AppContext.BaseDirectory, "pty-proxy", "index.js");
+
+    // Per-file lock to prevent concurrent read/write of settings.local.json
+    // when multiple agents share the same CWD.
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> SettingsFileLocks = new();
 
     public PtySession(Agent agent, Func<string, string, object, Task> emitEvent,
         string orchestratorUrl = "http://localhost:5050")
@@ -225,17 +230,29 @@ public class PtySession : IAsyncDisposable
         if (Environment.TickCount64 <= Volatile.Read(ref _resizeGraceUntilTick))
             return;
 
+        bool transitionToRunning = false;
         lock (_recentText)
         {
-            // Clear buffer when transitioning Idle→Running so old prompts don't match
-            if (_agent.Status != AgentStatus.Running)
+            // Only transition to Running on first output after being Idle/Done,
+            // not on every chunk (which would overwrite Idle status in pty_data events).
+            if (_agent.Status == AgentStatus.Idle || _agent.Status == AgentStatus.Done)
+            {
                 _recentText.Clear();
-
-            _agent.Status = AgentStatus.Running;
+                _agent.Status = AgentStatus.Running;
+                transitionToRunning = true;
+            }
 
             _recentText.Append(text);
             if (_recentText.Length > 8192)
                 _recentText.Remove(0, _recentText.Length - 8192);
+        }
+
+        // Immediately emit Running so frontend updates without waiting for debounce
+        if (transitionToRunning)
+        {
+            _lastEmittedStatus = AgentStatus.Running;
+            _ = _emitEvent(_agent.Id, "agent_status_changed",
+                new { agentId = _agent.Id, status = "running" });
         }
 
         // Fast path: 800ms debounce + regex check
@@ -286,17 +303,19 @@ public class PtySession : IAsyncDisposable
 
     // ── Process exit ──────────────────────────────────────────────────────
 
-    private void OnProcessExited(object? sender, EventArgs e)
+    private async void OnProcessExited(object? sender, EventArgs e)
     {
         if (_disposed) return;
         _idleTimer?.Dispose();
         _forceIdleTimer?.Dispose();
         _agent.Status = AgentStatus.Done;
         _agent.FinishedAt = DateTime.UtcNow;
-        OnExited?.Invoke();
-        _ = RemoveHooksAsync();
-        _ = _emitEvent(_agent.Id, "agent_exited",
+        // Emit event BEFORE OnExited removes the agent from the manager,
+        // so the frontend receives the agent object with status=Done.
+        await _emitEvent(_agent.Id, "agent_exited",
             new { agentId = _agent.Id, exitCode = _process?.ExitCode });
+        OnExited?.Invoke();
+        await RemoveHooksAsync();
     }
 
     public Task KillAsync()
@@ -324,38 +343,44 @@ public class PtySession : IAsyncDisposable
         var settingsPath = Path.Combine(claudeDir, "settings.local.json");
 
         _injectedSettingsPath = settingsPath;
-        _settingsCreatedByUs  = !File.Exists(settingsPath);
-
-        // Parse existing JSON (or start empty) and merge our hooks in
-        JsonObject json;
-        if (!_settingsCreatedByUs)
+        var fileLock = SettingsFileLocks.GetOrAdd(settingsPath, _ => new SemaphoreSlim(1, 1));
+        await fileLock.WaitAsync();
+        try
         {
-            try
+            _settingsCreatedByUs = !File.Exists(settingsPath);
+
+            // Parse existing JSON (or start empty) and merge our hooks in
+            JsonObject json;
+            if (!_settingsCreatedByUs)
             {
-                var existing = await File.ReadAllTextAsync(settingsPath);
-                json = JsonNode.Parse(existing) as JsonObject ?? new JsonObject();
+                try
+                {
+                    var existing = await File.ReadAllTextAsync(settingsPath);
+                    json = JsonNode.Parse(existing) as JsonObject ?? new JsonObject();
+                }
+                catch { json = new JsonObject(); _settingsCreatedByUs = true; }
             }
-            catch { json = new JsonObject(); _settingsCreatedByUs = true; }
-        }
-        else
-        {
-            json = new JsonObject();
-        }
+            else
+            {
+                json = new JsonObject();
+            }
 
-        if (json["hooks"] is not JsonObject hooksObj)
-        {
-            hooksObj = new JsonObject();
-            json["hooks"] = hooksObj;
+            if (json["hooks"] is not JsonObject hooksObj)
+            {
+                hooksObj = new JsonObject();
+                json["hooks"] = hooksObj;
+            }
+
+            var url = $"{_orchestratorUrl}/api/agents/{_agent.Id}";
+            AppendHook(hooksObj, "Stop",         $"curl -s -X POST \"{url}/hook/stop\"");
+            AppendHook(hooksObj, "Notification", $"curl -s --data-binary @- -H \"Content-Type: application/json\" \"{url}/hook/notification\"");
+            AppendHook(hooksObj, "PreToolUse",   $"curl -s --data-binary @- -H \"Content-Type: application/json\" \"{url}/hook/pre-tool\"");
+
+            Directory.CreateDirectory(claudeDir);
+            await File.WriteAllTextAsync(settingsPath,
+                json.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         }
-
-        var url = $"{_orchestratorUrl}/api/agents/{_agent.Id}";
-        AppendHook(hooksObj, "Stop",         $"curl -s -X POST \"{url}/hook/stop\"");
-        AppendHook(hooksObj, "Notification", $"curl -s --data-binary @- -H \"Content-Type: application/json\" \"{url}/hook/notification\"");
-        AppendHook(hooksObj, "PreToolUse",   $"curl -s --data-binary @- -H \"Content-Type: application/json\" \"{url}/hook/pre-tool\"");
-
-        Directory.CreateDirectory(claudeDir);
-        await File.WriteAllTextAsync(settingsPath,
-            json.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        finally { fileLock.Release(); }
     }
 
     private static void AppendHook(JsonObject hooksObj, string eventType, string command)
@@ -377,6 +402,8 @@ public class PtySession : IAsyncDisposable
     private async Task RemoveHooksAsync()
     {
         if (_injectedSettingsPath is null) return;
+        var fileLock = SettingsFileLocks.GetOrAdd(_injectedSettingsPath, _ => new SemaphoreSlim(1, 1));
+        await fileLock.WaitAsync();
         try
         {
             if (!File.Exists(_injectedSettingsPath)) return;
@@ -432,6 +459,7 @@ public class PtySession : IAsyncDisposable
             }
         }
         catch { }
+        finally { fileLock.Release(); }
     }
 
     // ── Command resolution ────────────────────────────────────────────────

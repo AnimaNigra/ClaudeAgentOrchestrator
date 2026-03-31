@@ -5,13 +5,21 @@
     @click="$emit('select', agent.id)"
   >
     <div class="flex items-center justify-between mb-1">
-      <span class="font-bold text-sm truncate">{{ agent.name }}</span>
+      <div class="flex items-center gap-1.5 min-w-0">
+        <span class="font-bold text-sm truncate">{{ agent.name }}</span>
+        <span v-if="agent.worktreeBranch" class="text-[10px] text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded flex-shrink-0" title="Running in worktree">🌿 {{ agent.worktreeBranch }}</span>
+      </div>
       <span v-if="agent.status === 'Running'" class="spinner" title="Running"></span>
-    <span v-else class="status-dot" :title="agent.status">{{ statusIcon }}</span>
+      <span v-else class="status-dot" :title="agent.status">{{ statusIcon }}</span>
     </div>
 
-    <div class="text-xs text-gray-400 truncate mb-1" :title="agent.cwd ?? 'default'">
-      📁 {{ agent.cwd ?? 'default' }}
+    <div class="text-xs text-gray-400 truncate mb-1 flex items-center gap-1" :title="agent.cwd ?? 'default'">
+      <button
+        @click.stop="openFolder"
+        class="hover:text-blue-400 transition-colors flex-shrink-0"
+        title="Open folder in explorer"
+      >📁</button>
+      <span class="truncate">{{ agent.cwd ?? 'default' }}</span>
     </div>
 
     <div class="text-xs truncate text-gray-300 min-h-[1rem]">
@@ -21,6 +29,12 @@
     <div class="flex items-center justify-between mt-2">
       <span class="text-xs text-gray-500">{{ agent.elapsedStr }}</span>
       <div class="flex items-center gap-2">
+        <button
+          v-if="!agent.worktreeBranch"
+          class="text-[10px] text-gray-500 hover:text-emerald-400 px-1.5 py-0.5 rounded hover:bg-gray-700/50 transition-colors"
+          @click.stop="$emit('create-worktree', agent)"
+          title="Create a worktree clone of this agent's repo"
+        >🌿 worktree</button>
         <button
           class="text-[10px] text-gray-500 hover:text-blue-400 px-1.5 py-0.5 rounded hover:bg-gray-700/50 transition-colors"
           @click.stop="$emit('review', agent.id)"
@@ -42,7 +56,7 @@
 import { computed } from 'vue'
 
 const props = defineProps({ agent: Object, isActive: Boolean })
-defineEmits(['select', 'review'])
+defineEmits(['select', 'review', 'create-worktree'])
 
 const STATUS_ICONS = {
   Running: '🟢', Idle: '🔵', Done: '✅', Error: '🔴', Blocked: '🟡'
@@ -54,6 +68,10 @@ const STATUS_TEXT = {
 const STATUS_BORDER = {
   Running: 'border-green-600', Idle: 'border-blue-700',
   Done: 'border-gray-600', Error: 'border-red-600', Blocked: 'border-yellow-600'
+}
+
+async function openFolder() {
+  await fetch(`/api/agents/${props.agent.id}/open-folder`, { method: 'POST' })
 }
 
 const statusIcon = computed(() => STATUS_ICONS[props.agent.status] ?? '⚪')

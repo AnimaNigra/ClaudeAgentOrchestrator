@@ -23,3 +23,7 @@ public record UpdateTaskRequest(
 public record AssignTaskRequest(string AgentId);
 
 public record UpdateHistoryRequest(string? Notes = null);
+
+public record CreateWorktreeRequest(string Name, string Cwd);
+
+public record OpenFolderRequest(string Path);

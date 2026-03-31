@@ -43,6 +43,7 @@ builder.Services.AddSingleton<TaskService>();
 builder.Services.AddSingleton<AgentHistoryService>();
 builder.Services.AddSingleton<PriorityService>();
 builder.Services.AddSingleton<GitReviewService>();
+builder.Services.AddSingleton<WorktreeService>();
 
 builder.Services.AddSingleton<AgentManager>(sp =>
 {
@@ -51,13 +52,20 @@ builder.Services.AddSingleton<AgentManager>(sp =>
     var manager = new AgentManager(maxAgents: 10, orchestratorUrl: $"http://localhost:{port}", historyService: historyService);
     manager.AddEventListener(async (agentId, eventType, data) =>
     {
-        var agent = manager.GetAgent(agentId);
+        // Don't include the full agent object in high-frequency PTY events —
+        // status updates are sent via dedicated agent_status_changed events.
+        var agent = eventType is "pty_data" or "agent_stderr"
+            ? null
+            : manager.GetAgent(agentId);
         await hub.Clients.All.SendAsync("AgentEvent", new { agentId, eventType, data, agent });
     });
     return manager;
 });
 
 var app = builder.Build();
+
+// Clean up orphaned orchestrator hooks in all known CWDs from history
+_ = app.Services.GetRequiredService<AgentHistoryService>().CleanupOrphanedHooksAsync();
 
 // ── Dev mode: start Vite + proxy frontend requests ──────────────────────────
 Process? viteProcess = null;
@@ -133,7 +141,9 @@ if (app.Environment.IsDevelopment())
 else
 {
     app.UseDefaultFiles();
-    app.UseStaticFiles();
+    var provider = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+    provider.Mappings[".webmanifest"] = "application/manifest+json";
+    app.UseStaticFiles(new StaticFileOptions { ContentTypeProvider = provider });
     app.MapFallbackToFile("index.html");
 }
 

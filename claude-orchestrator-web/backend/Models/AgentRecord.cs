@@ -10,4 +10,7 @@ public class AgentRecord
     public DateTime? FinishedAt { get; set; }
     public List<string> TaskIds { get; set; } = new();
     public string? Notes { get; set; }
+    public string? WorktreePath { get; set; }
+    public string? WorktreeBranch { get; set; }
+    public string? OriginalCwd { get; set; }
 }

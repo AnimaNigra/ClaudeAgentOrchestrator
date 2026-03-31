@@ -10,6 +10,7 @@
         :is-active="store.activeAgentId === agent.id"
         @select="store.activeAgentId = $event"
         @review="toggleReview($event)"
+        @create-worktree="handleCreateWorktree($event)"
       />
       <div v-if="!store.agentList.length" class="text-xs text-gray-600 p-2">
         No agents. Type <code class="text-blue-400">create &lt;name&gt;</code> below.
@@ -50,6 +51,20 @@
     :agent-id="store.activeAgentId"
     @close="showVoiceDialog = false"
   />
+
+  <!-- Worktree name prompt -->
+  <PromptDialog
+    :show="!!worktreeAgent"
+    title="Create Worktree"
+    :message="`New worktree for ${worktreeAgent?.name}`"
+    type="prompt"
+    placeholder="Worktree name"
+    :default-value="worktreeAgent ? worktreeAgent.name + '-wt' : ''"
+    confirm-text="Create"
+    :error-msg="worktreeError"
+    @close="worktreeAgent = null; worktreeError = ''"
+    @confirm="doCreateWorktree"
+  />
 </template>
 
 <script setup>
@@ -62,6 +77,7 @@ import CommandBar from '../components/CommandBar.vue'
 import PermissionDialog from '../components/PermissionDialog.vue'
 import VoiceDictateButton from '../components/VoiceDictateButton.vue'
 import VoiceDictateDialog from '../components/VoiceDictateDialog.vue'
+import PromptDialog from '../components/PromptDialog.vue'
 
 const store = useAgentsStore()
 const cmdBar = ref(null)
@@ -72,6 +88,26 @@ const sidebarWidth = ref(256)
 function toggleReview(agentId) {
   reviewAgentId.value = reviewAgentId.value === agentId ? null : agentId
   store.activeAgentId = agentId
+}
+
+const worktreeAgent = ref(null)
+const worktreeError = ref('')
+
+function handleCreateWorktree(agent) {
+  if (!agent.cwd) return
+  worktreeAgent.value = agent
+  worktreeError.value = ''
+}
+
+async function doCreateWorktree(name) {
+  try {
+    const newAgent = await store.createWorktree(name, worktreeAgent.value.cwd)
+    worktreeAgent.value = null
+    worktreeError.value = ''
+    store.activeAgentId = newAgent.id
+  } catch (e) {
+    worktreeError.value = e.message
+  }
 }
 
 function startSidebarResize(e) {
