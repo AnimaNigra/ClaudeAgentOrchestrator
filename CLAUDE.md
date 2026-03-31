@@ -1,62 +1,57 @@
-# Claude Agent Orchestrator — kontext pro Claude Code
+# Claude Agent Orchestrator — context for Claude Code
 
-## Co je tento projekt
+## What is this project
 
-Webová aplikace pro správu více Claude Code agentů najednou. Backend je ASP.NET Core 9, frontend Vue 3 + Pinia + xterm.js. Každý agent běží ve vlastním PTY (přes node-pty proxy) a komunikuje se s frontendem přes SignalR.
+A web application for managing multiple Claude Code agents at once. The backend is ASP.NET Core 9, the frontend is Vue 3 + Pinia + xterm.js. Each agent runs in its own PTY (via a node-pty proxy) and communicates with the frontend over SignalR.
 
-## Struktura
+## Structure
 
 ```
 claude-orchestrator-web/
   backend/          — ASP.NET Core 9 (.NET 9)
-    Controllers/    — REST API (Agents, Priorities)
-    Services/       — AgentManager, PtySession, PriorityService, ...
-    Models/         — Agent, PriorityItem, ...
-    pty-proxy/      — Node.js proxy (node-pty → ConPTY/pty)
+    Controllers/    — REST API (Agents, Worktree, Priorities, History, Tasks)
+    Services/       — AgentManager, PtySession, WorktreeService, PriorityService, ...
+    Models/         — Agent, AgentRecord, PriorityItem, ...
+    pty-proxy/      — Node.js proxy (node-pty -> ConPTY/pty)
   frontend/         — Vue 3 + Vite + Pinia + TailwindCSS
     src/
-      components/   — AgentCard, TerminalPanel, CommandBar, VoiceDictate*, PermissionDialog
-      views/        — AgentsView, PrioritiesView
+      components/   — AgentCard, TerminalPanel, CommandBar, PromptDialog, VoiceDictate*, PermissionDialog
+      views/        — AgentsView, WorktreesView, HistoryView, PrioritiesView, TasksView
       stores/       — agentStore, priorityStore
 ```
 
-## Klíčové technologie
+## Key technologies
 
-- **Backend:** ASP.NET Core 9, SignalR, node-pty (přes Node.js proxy)
+- **Backend:** ASP.NET Core 9, SignalR, node-pty (via Node.js proxy)
 - **Frontend:** Vue 3 (Composition API), Pinia, xterm.js, TailwindCSS, Web Speech API
-- **Persistence:** Prioritní seznam v `data/priorities.json`
+- **Persistence:** JSON files in `data/` directory
 
-## Dev spuštění
+## Dev startup
 
 ```bash
 cd claude-orchestrator-web/backend
 dotnet run
 ```
 
-Backend automaticky spustí Vite na portu 5173 a proxy na `http://localhost:5050`.
+The backend auto-launches Vite on port 5180 and the pty-proxy.
 
-> Pokud selže s "Vite dev server not available": spusť `npm install` ve `frontend/`.
+> If Vite fails: run `npm install` in `frontend/`.
 
-## Produkční build
+## Production build
 
 ```powershell
 cd claude-orchestrator-web/backend
 dotnet clean -c Release; dotnet publish -c Release
 ```
 
-`dotnet clean` je nutný — Vite generuje nové hashe při každém buildu.
+`dotnet clean` is required — Vite generates new hashes on every build.
 
-## Funkce
+## Important patterns
 
-- Více Claude agentů najednou, každý v samostatném PTY
-- Plný xterm.js terminál (barvy, TUI, slash příkazy)
-- PreToolUse hook — schvalování nástrojů přes dialog v prohlížeči
-- Hlasové diktování (`VoiceDictateButton` + `VoiceDictateDialog`) — Web Speech API, normalizace čísel, příloha obrázku
-- Prioritní seznam (záložka Priorities) — drag & drop, inline editace, JSON persistence
-
-## Důležité vzory
-
-- Komunikace frontend ↔ backend probíhá přes **SignalR** (`/hubs/agents`) pro real-time eventy a **REST API** pro akce
-- PTY výstup je přenášen jako base64: `DATA:<base64>` → `atob()` → `terminal.write()`
-- Hooky se injektují do `.claude/settings.local.json` v CWD každého agenta a po ukončení se čistí
-- `PtySession` detekuje stav agenta primárně přes hooks, záložně přes regex na PTY výstup
+- Frontend-backend communication uses **SignalR** (`/hubs/agents`) for real-time events and **REST API** for actions
+- PTY output is transmitted as base64: `DATA:<base64>` -> `atob()` -> `terminal.write()`
+- Hooks are injected into `.claude/settings.local.json` in each agent's CWD and cleaned up on exit (with per-file locking for concurrent access)
+- `PtySession` detects agent state primarily via hooks, with regex-based PTY output detection as fallback
+- Worktrees are created as sibling directories: `<project>-wt-<name>/`
+- High-frequency `pty_data` events do NOT include the agent object to prevent overwriting idle status
+- Worktree agents are excluded from session history (temporary directories)
