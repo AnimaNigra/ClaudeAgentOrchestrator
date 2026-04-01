@@ -1,0 +1,45 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install frontend dependencies
+        working-directory: claude-orchestrator-web/frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: claude-orchestrator-web/frontend
+        run: npm run build
+
+      - name: Install pty-proxy dependencies
+        working-directory: claude-orchestrator-web/backend/pty-proxy
+        run: npm ci
+
+      - name: Restore .NET dependencies
+        run: dotnet restore claude-orchestrator-web/backend/ClaudeOrchestrator.csproj
+
+      - name: Build backend
+        run: dotnet build claude-orchestrator-web/backend/ClaudeOrchestrator.csproj --no-restore
+
+      - name: Run tests
+        run: dotnet test claude-orchestrator-web/tests/ClaudeOrchestrator.Tests.csproj --no-restore

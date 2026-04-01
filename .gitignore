@@ -484,6 +484,9 @@ $RECYCLE.BIN/
 # Claude Code settings (personal permissions, runtime hooks)
 .claude/
 
+# Visual Studio solution files
+*.sln
+
 # Internal design docs and plans
 docs/
 PLAN.md
@@ -494,4 +497,4 @@ claude-orchestrator-web/backend/wwwroot/
 
 # Runtime data
 tmp/
-backend/data/
+**/data/

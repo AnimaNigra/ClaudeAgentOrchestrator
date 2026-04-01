@@ -31,7 +31,7 @@
 
     <!-- Kanban columns -->
     <div class="flex flex-1 overflow-hidden">
-      <!-- TODO -->
+      <!-- Todo column -->
       <KanbanColumn title="Todo" :count="store.todoTasks.length" color="text-gray-400">
         <TaskCard
           v-for="task in store.todoTasks"

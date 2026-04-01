@@ -70,9 +70,9 @@ export const useAgentsStore = defineStore('agents', () => {
     if (!agent) return
     await playDing()
     if (Notification.permission === 'granted') {
-      new Notification(`⏳ ${agent.name} čeká na vstup`, {
-        body: 'Agent potřebuje tvoji odpověď.',
-        silent: true, // zvuk hrajeme sami
+      new Notification(`⏳ ${agent.name} waiting for input`, {
+        body: 'Agent needs your response.',
+        silent: true,
       })
     }
   }

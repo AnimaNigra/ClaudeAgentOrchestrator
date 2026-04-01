@@ -2,8 +2,7 @@
 
 A web-based dashboard for managing multiple [Claude Code](https://docs.anthropic.com/en/docs/claude-code) agents simultaneously. Each agent runs in its own pseudo-terminal (PTY) and streams output to the browser via xterm.js &mdash; full color, TUI support, slash commands, and interactive prompts.
 
-<!-- TODO: Add screenshot of the main dashboard with multiple agents running -->
-![Dashboard](docs/screenshots/dashboard.png)
+![Dashboard](screenshots/dashboard.png)
 
 ## Features
 
@@ -137,6 +136,10 @@ Or via environment variable: `Port=8080`
 ## Platform Support
 
 Currently tested on **Windows** (ConPTY). The architecture supports Linux/macOS via node-pty but has not been tested on those platforms.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
 
 ## License
 

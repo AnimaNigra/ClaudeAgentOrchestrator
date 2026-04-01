@@ -1,6 +1,8 @@
 {
   "name": "claude-orchestrator-frontend",
   "version": "0.1.0",
+  "description": "Frontend for Claude Agent Orchestrator — manage multiple Claude Code agents from a browser",
+  "author": "Jan Nemec",
   "type": "module",
   "scripts": {
     "dev": "vite",

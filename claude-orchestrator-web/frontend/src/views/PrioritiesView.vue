@@ -5,7 +5,7 @@
       <input
         v-model="newText"
         @keydown.enter="handleAdd"
-        placeholder="Přidat prioritu..."
+        placeholder="Add priority..."
         class="flex-1 bg-gray-800 text-sm text-white placeholder-gray-500 rounded px-3 py-1 outline-none focus:ring-1 focus:ring-blue-500"
       />
       <button
@@ -83,7 +83,7 @@
       </div>
 
       <p v-if="store.items.length === 0" class="text-xs text-gray-600 py-4 text-center">
-        Žádné priority. Přidej první.
+        No priorities yet. Add your first one.
       </p>
     </div>
   </div>

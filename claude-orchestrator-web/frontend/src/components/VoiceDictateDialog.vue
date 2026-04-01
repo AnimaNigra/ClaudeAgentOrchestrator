@@ -12,7 +12,7 @@
             class="inline-block w-2 h-2 rounded-full"
             :class="isRecording ? 'bg-red-500 animate-pulse' : 'bg-gray-600'"
           />
-          {{ isRecording ? 'Nahrávám…' : 'Hlasové zadávání' }}
+          {{ isRecording ? 'Recording…' : 'Voice Dictation' }}
         </h2>
 
         <!-- Error banner -->
@@ -22,11 +22,11 @@
 
         <!-- Transcript textarea -->
         <div class="flex flex-col gap-1">
-          <label class="text-xs text-gray-400">Přepis</label>
+          <label class="text-xs text-gray-400">Transcript</label>
           <textarea
             v-model="transcript"
             rows="6"
-            placeholder="Začněte mluvit…"
+            placeholder="Start speaking…"
             class="bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 resize-none font-mono"
           />
           <!-- Interim text (partial, grayed out) -->
@@ -35,7 +35,7 @@
 
         <!-- Image picker (agent mode only) -->
         <div v-if="agentId" class="flex flex-col gap-1">
-          <label class="text-xs text-gray-400">Obrázky <span class="text-gray-600">(volitelné)</span></label>
+          <label class="text-xs text-gray-400">Images <span class="text-gray-600">(optional)</span></label>
           <div class="flex items-center gap-2">
             <input
               ref="fileInputEl"
@@ -49,7 +49,7 @@
               @click="fileInputEl.click()"
               class="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
             >
-              Vybrat obrázek
+              Choose image
             </button>
             <span class="text-xs text-gray-600">nebo Ctrl+V</span>
           </div>
@@ -73,26 +73,26 @@
             @click="stopRecording"
             class="px-3 py-1.5 text-xs bg-red-900/60 hover:bg-red-900 text-red-300 rounded transition-colors"
           >
-            Zastavit
+            Stop
           </button>
           <button
             v-else
             @click="startRecording"
             class="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
           >
-            Znovu nahrát
+            Record again
           </button>
 
           <div class="flex gap-2">
             <button
               @click="cancel"
               class="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
-            >Zrušit</button>
+            >Cancel</button>
             <button
               @click="confirm"
               :disabled="!canConfirm"
               class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors"
-            >Odeslat</button>
+            >Send</button>
           </div>
         </div>
       </div>
@@ -161,11 +161,11 @@ let recognition = null
 function buildRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
   if (!SpeechRecognition) {
-    error.value = 'Váš prohlížeč nepodporuje hlasové zadávání. Použijte Chrome nebo Edge.'
+    error.value = 'Your browser does not support speech recognition. Please use Chrome or Edge.'
     return null
   }
   const r = new SpeechRecognition()
-  r.lang = 'cs-CZ'
+  r.lang = navigator.language || 'en-US'
   r.continuous = true
   r.interimResults = true
 
@@ -183,7 +183,7 @@ function buildRecognition() {
   }
 
   r.onerror = (event) => {
-    error.value = `Chyba rozpoznávání: ${event.error}`
+    error.value = `Recognition error: ${event.error}`
     isRecording.value = false
   }
 
@@ -277,11 +277,11 @@ async function confirm() {
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        error.value = body.error ?? `Chyba nahrávání: HTTP ${res.status}`
+        error.value = body.error ?? `Upload error: HTTP ${res.status}`
         return
       }
     } catch (e) {
-      error.value = `Chyba nahrávání: ${e.message}`
+      error.value = `Upload error: ${e.message}`
       return
     }
   }
@@ -293,7 +293,7 @@ async function confirm() {
       await store.sendKeystroke(props.agentId, text + '\r')
       transcript.value = ''
     } catch (e) {
-      error.value = `Chyba odeslání: ${e.message}`
+      error.value = `Send error: ${e.message}`
       return
     }
   }

@@ -42,7 +42,6 @@
 
     <!-- Action buttons -->
     <div class="flex gap-2 mt-1">
-      <!-- TODO: assign to agent -->
       <template v-if="task.status === 'todo'">
         <select
           v-if="availableAgents.length"
