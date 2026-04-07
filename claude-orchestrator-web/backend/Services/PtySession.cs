@@ -30,6 +30,7 @@ public class PtySession : IAsyncDisposable
     private bool _disposed;
     private string? _injectedSettingsPath;
     private bool _settingsCreatedByUs;
+    private bool _statuslineInjectedByUs;
 
     public Action? OnExited { get; set; }
 
@@ -65,6 +66,9 @@ public class PtySession : IAsyncDisposable
 
     private static readonly string ProxyScript =
         Path.Combine(AppContext.BaseDirectory, "pty-proxy", "index.js");
+
+    private static readonly string StatuslineScript =
+        Path.Combine(AppContext.BaseDirectory, "hooks", "statusline.js");
 
     // Per-file lock to prevent concurrent read/write of settings.local.json
     // when multiple agents share the same CWD.
@@ -376,6 +380,18 @@ public class PtySession : IAsyncDisposable
             AppendHook(hooksObj, "Notification", $"curl -s --data-binary @- -H \"Content-Type: application/json\" \"{url}/hook/notification\"");
             AppendHook(hooksObj, "PreToolUse",   $"curl -s --data-binary @- -H \"Content-Type: application/json\" \"{url}/hook/pre-tool\"");
 
+            // Inject statusLine config to receive structured usage data
+            if (json["statusLine"] is null)
+            {
+                var nodePath = FindNodeExe();
+                json["statusLine"] = new JsonObject
+                {
+                    ["type"] = "command",
+                    ["command"] = $"\"{nodePath}\" \"{StatuslineScript}\"",
+                };
+                _statuslineInjectedByUs = true;
+            }
+
             Directory.CreateDirectory(claudeDir);
             await File.WriteAllTextAsync(settingsPath,
                 json.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
@@ -443,6 +459,9 @@ public class PtySession : IAsyncDisposable
                 if (!hooksObj.Any())
                     json.Remove("hooks");
             }
+
+            if (_statuslineInjectedByUs)
+                json.Remove("statusLine");
 
             // Delete file if now empty and we created it; otherwise write back
             if (!json.Any() && _settingsCreatedByUs)

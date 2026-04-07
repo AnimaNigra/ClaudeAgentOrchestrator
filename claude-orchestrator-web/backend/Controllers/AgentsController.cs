@@ -143,6 +143,44 @@ public class AgentsController : ControllerBase
         return Ok();
     }
 
+    /// <summary>Called by the Statusline hook with structured usage JSON.</summary>
+    [HttpPost("{id}/hook/statusline")]
+    public async Task<IActionResult> HookStatusline(string id, [FromBody] JsonElement body)
+    {
+        int? contextPct = null;
+        double? cost = null;
+        int? rateLimitPct = null;
+        string? rateLimitReset = null;
+        string? modelName = null;
+
+        if (body.TryGetProperty("context_window", out var cw))
+        {
+            if (cw.TryGetProperty("used_percentage", out var up) && up.ValueKind == JsonValueKind.Number)
+                contextPct = up.GetInt32();
+        }
+
+        if (body.TryGetProperty("cost", out var c) &&
+            c.TryGetProperty("total_cost_usd", out var tc) && tc.ValueKind == JsonValueKind.Number)
+            cost = Math.Round(tc.GetDouble(), 4);
+
+        if (body.TryGetProperty("rate_limits", out var rl) &&
+            rl.TryGetProperty("five_hour", out var fh))
+        {
+            if (fh.TryGetProperty("used_percentage", out var rp) && rp.ValueKind == JsonValueKind.Number)
+                rateLimitPct = (int)Math.Round(rp.GetDouble());
+            if (fh.TryGetProperty("resets_at", out var ra) && ra.ValueKind == JsonValueKind.Number)
+                rateLimitReset = DateTimeOffset.FromUnixTimeSeconds(ra.GetInt64())
+                    .ToLocalTime().ToString("HH:mm");
+        }
+
+        if (body.TryGetProperty("model", out var model) &&
+            model.TryGetProperty("display_name", out var dn))
+            modelName = dn.GetString();
+
+        await _manager.UpdateUsageAsync(id, contextPct, cost, rateLimitPct, rateLimitReset, modelName);
+        return Ok();
+    }
+
     /// <summary>
     /// Called by the PreToolUse hook. Blocks until the user approves or denies.
     /// Returns { approved: bool, reason?: string }.

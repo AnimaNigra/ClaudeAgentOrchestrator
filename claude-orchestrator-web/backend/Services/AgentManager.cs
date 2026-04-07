@@ -49,6 +49,26 @@ public class AgentManager : IAsyncDisposable
         await EmitEventAsync(agentId, "agent_notification", new { agentId, message });
     }
 
+    public async Task UpdateUsageAsync(string agentId, int? contextPct, double? estimatedCost,
+        int? rateLimitPct, string? rateLimitResetAt, string? modelName)
+    {
+        if (!_agents.TryGetValue(agentId, out var agent)) return;
+        agent.ContextPct = contextPct;
+        agent.EstimatedCost = estimatedCost;
+        agent.RateLimitPct = rateLimitPct;
+        agent.RateLimitResetAt = rateLimitResetAt;
+        agent.ModelName = modelName;
+        await EmitEventAsync(agentId, "agent_usage_updated", new
+        {
+            agentId,
+            contextPct,
+            estimatedCost,
+            rateLimitPct,
+            rateLimitResetAt,
+            modelName,
+        });
+    }
+
     public async Task<(bool approved, string? reason)> RequestPermissionAsync(
         string agentId, string toolName, object? toolInput)
     {

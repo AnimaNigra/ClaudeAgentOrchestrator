@@ -54,7 +54,7 @@ builder.Services.AddSingleton<AgentManager>(sp =>
     {
         // Don't include the full agent object in high-frequency PTY events —
         // status updates are sent via dedicated agent_status_changed events.
-        var agent = eventType is "pty_data" or "agent_stderr"
+        var agent = eventType is "pty_data" or "agent_stderr" or "agent_usage_updated"
             ? null
             : manager.GetAgent(agentId);
         await hub.Clients.All.SendAsync("AgentEvent", new { agentId, eventType, data, agent });

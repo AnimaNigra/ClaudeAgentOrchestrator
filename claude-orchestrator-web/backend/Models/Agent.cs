@@ -26,6 +26,13 @@ public class Agent
     public string? WorktreeBranch { get; set; }
     public string? OriginalCwd { get; set; }
 
+    // Usage tracking (populated via Statusline JSON API hook)
+    public int? ContextPct { get; set; }
+    public double? EstimatedCost { get; set; }
+    public int? RateLimitPct { get; set; }
+    public string? RateLimitResetAt { get; set; }
+    public string? ModelName { get; set; }
+
     public string ElapsedStr
     {
         get
