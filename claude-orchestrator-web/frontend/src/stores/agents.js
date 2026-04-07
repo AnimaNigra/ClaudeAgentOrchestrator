@@ -131,6 +131,15 @@ export const useAgentsStore = defineStore('agents', () => {
         }
       } else if (eventType === 'agent_notification') {
         notifyIdle(agents.value[agentId])
+      } else if (eventType === 'agent_usage_updated') {
+        const a = agents.value[agentId]
+        if (a && data) {
+          a.contextPct = data.contextPct
+          a.estimatedCost = data.estimatedCost
+          a.rateLimitPct = data.rateLimitPct
+          a.rateLimitResetAt = data.rateLimitResetAt
+          a.modelName = data.modelName
+        }
       } else if (eventType === 'agent_killed' || eventType === 'agent_exited') {
         // Remove from list after a brief pause so user sees the Done state
         setTimeout(() => {

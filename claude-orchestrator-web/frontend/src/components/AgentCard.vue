@@ -49,6 +49,19 @@
         <div class="h-1 rounded bg-blue-500 transition-all" :style="{ width: agent.progressPct + '%' }"></div>
       </div>
     </div>
+
+    <div v-if="agent.contextPct != null" class="flex items-center gap-1.5 mt-1 text-[10px] leading-none">
+      <span :class="contextColor">ctx {{ agent.contextPct }}%</span>
+      <template v-if="agent.rateLimitPct != null">
+        <span class="text-gray-600">&middot;</span>
+        <span :class="rateColor">rate {{ agent.rateLimitPct }}%</span>
+        <span v-if="agent.rateLimitResetAt" class="text-gray-600">({{ agent.rateLimitResetAt }})</span>
+      </template>
+      <template v-if="agent.estimatedCost">
+        <span class="text-gray-600">&middot;</span>
+        <span class="text-gray-500">${{ agent.estimatedCost.toFixed(2) }}</span>
+      </template>
+    </div>
   </div>
 </template>
 
@@ -81,6 +94,20 @@ const statusClass = computed(() => ({
   'border-2': props.isActive,
   'border': !props.isActive,
 }))
+
+const contextColor = computed(() => {
+  const pct = props.agent.contextPct ?? 0
+  if (pct > 80) return 'text-red-400'
+  if (pct > 50) return 'text-amber-400'
+  return 'text-gray-500'
+})
+
+const rateColor = computed(() => {
+  const pct = props.agent.rateLimitPct ?? 0
+  if (pct > 80) return 'text-red-400'
+  if (pct > 50) return 'text-amber-400'
+  return 'text-gray-500'
+})
 </script>
 
 <style scoped>
