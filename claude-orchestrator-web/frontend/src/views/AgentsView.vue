@@ -83,7 +83,7 @@ const store = useAgentsStore()
 const cmdBar = ref(null)
 const showVoiceDialog = ref(false)
 const reviewAgentId = ref(null)
-const sidebarWidth = ref(256)
+const sidebarWidth = ref(Number(localStorage.getItem('sidebarWidth')) || 256)
 
 function toggleReview(agentId) {
   reviewAgentId.value = reviewAgentId.value === agentId ? null : agentId
@@ -121,6 +121,7 @@ function startSidebarResize(e) {
     document.removeEventListener('mouseup', onUp)
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
+    localStorage.setItem('sidebarWidth', sidebarWidth.value)
   }
   document.body.style.cursor = 'col-resize'
   document.body.style.userSelect = 'none'
