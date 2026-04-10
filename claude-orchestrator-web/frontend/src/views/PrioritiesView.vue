@@ -134,15 +134,20 @@ function onDragStart(item) {
 async function onDrop(targetItem) {
   if (!dragItem || dragItem.id === targetItem.id) return
 
-  // Swap orders
-  const reorderList = store.items.map(i => ({ id: i.id, order: i.order }))
-  const dragEntry  = reorderList.find(r => r.id === dragItem.id)
-  const dropEntry  = reorderList.find(r => r.id === targetItem.id)
-  if (!dragEntry || !dropEntry) return
+  // Insert-based reorder: remove dragged item, re-insert at target position
+  const oldIndex = store.items.findIndex(i => i.id === dragItem.id)
+  const targetIndexOriginal = store.items.findIndex(i => i.id === targetItem.id)
+  if (oldIndex < 0 || targetIndexOriginal < 0) return
 
-  const tempOrder = dragEntry.order
-  dragEntry.order = dropEntry.order
-  dropEntry.order = tempOrder
+  const newItems = [...store.items]
+  const [moved] = newItems.splice(oldIndex, 1)
+  // Splicing at targetIndexOriginal gives the desired behavior in both directions:
+  //  - dragging down: target shifted left by 1 after removal, so targetIndexOriginal inserts AFTER it
+  //  - dragging up:   target kept its index, so targetIndexOriginal inserts BEFORE it
+  newItems.splice(targetIndexOriginal, 0, moved)
+
+  // Assign fresh sequential order values (0..N)
+  const reorderList = newItems.map((item, idx) => ({ id: item.id, order: idx }))
 
   await store.reorder(reorderList)
   await store.load() // refresh sorted order
