@@ -4,15 +4,18 @@
     :class="[statusClass, { active: isActive }]"
     @click="$emit('select', agent.id)"
   >
+    <!-- Row 1: Name + model badge + status -->
     <div class="flex items-center justify-between mb-1">
       <div class="flex items-center gap-1.5 min-w-0">
         <span class="font-bold text-sm truncate">{{ agent.name }}</span>
+        <span v-if="agent.modelName" class="text-[10px] text-purple-300 bg-purple-400/10 px-1.5 py-0.5 rounded flex-shrink-0">{{ agent.modelName }}</span>
         <span v-if="agent.worktreeBranch" class="text-[10px] text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded flex-shrink-0" title="Running in worktree">🌿 {{ agent.worktreeBranch }}</span>
       </div>
       <span v-if="agent.status === 'Running'" class="spinner" title="Running"></span>
       <span v-else class="status-dot" :title="agent.status">{{ statusIcon }}</span>
     </div>
 
+    <!-- Row 2: CWD -->
     <div class="text-xs text-gray-400 truncate mb-1 flex items-center gap-1" :title="agent.cwd ?? 'default'">
       <button
         @click.stop="openFolder"
@@ -22,12 +25,35 @@
       <span class="truncate">{{ agent.cwd ?? 'default' }}</span>
     </div>
 
+    <!-- Row 3: Last message -->
     <div class="text-xs truncate text-gray-300 min-h-[1rem]">
       {{ agent.lastMessage || '…' }}
     </div>
 
+    <!-- Row 4: Context bar + rate limit -->
+    <div v-if="agent.contextPct != null" class="mt-2 space-y-1">
+      <div class="flex items-center gap-2">
+        <span class="text-[11px] text-gray-400 w-7 flex-shrink-0">ctx</span>
+        <div class="flex-1 bg-gray-700/60 rounded-full h-[6px]">
+          <div class="h-[6px] rounded-full transition-all" :class="contextBarColor" :style="{ width: Math.min(agent.contextPct, 100) + '%' }"></div>
+        </div>
+        <span class="text-[11px] font-medium w-8 text-right" :class="contextColor">{{ agent.contextPct }}%</span>
+      </div>
+      <div v-if="agent.rateLimitPct != null" class="flex items-center gap-2">
+        <span class="text-[11px] text-gray-400 w-7 flex-shrink-0">rate</span>
+        <div class="flex-1 bg-gray-700/60 rounded-full h-[6px]">
+          <div class="h-[6px] rounded-full transition-all" :class="rateBarColor" :style="{ width: Math.min(agent.rateLimitPct, 100) + '%' }"></div>
+        </div>
+        <span class="text-[11px] font-medium w-8 text-right" :class="rateColor">{{ agent.rateLimitPct }}%</span>
+        <span v-if="agent.rateLimitResetAt" class="text-[10px] text-gray-500 flex-shrink-0">{{ agent.rateLimitResetAt }}</span>
+      </div>
+    </div>
+
+    <!-- Row 5: Cost + actions -->
     <div class="flex items-center justify-between mt-2">
-      <span class="text-xs text-gray-500">{{ agent.elapsedStr }}</span>
+      <div class="flex items-center gap-2">
+        <span v-if="agent.estimatedCost" class="text-[11px] text-gray-400 bg-gray-700/40 px-1.5 py-0.5 rounded">${{ agent.estimatedCost.toFixed(2) }}</span>
+      </div>
       <div class="flex items-center gap-2">
         <button
           v-if="!agent.worktreeBranch"
@@ -44,23 +70,11 @@
       </div>
     </div>
 
+    <!-- Progress bar (task progress, if applicable) -->
     <div v-if="agent.progressPct >= 0" class="mt-1">
       <div class="w-full bg-gray-700 rounded h-1">
         <div class="h-1 rounded bg-blue-500 transition-all" :style="{ width: agent.progressPct + '%' }"></div>
       </div>
-    </div>
-
-    <div v-if="agent.contextPct != null" class="flex items-center gap-1.5 mt-1 text-[10px] leading-none">
-      <span :class="contextColor">ctx {{ agent.contextPct }}%</span>
-      <template v-if="agent.rateLimitPct != null">
-        <span class="text-gray-600">&middot;</span>
-        <span :class="rateColor">rate {{ agent.rateLimitPct }}%</span>
-        <span v-if="agent.rateLimitResetAt" class="text-gray-600">({{ agent.rateLimitResetAt }})</span>
-      </template>
-      <template v-if="agent.estimatedCost">
-        <span class="text-gray-600">&middot;</span>
-        <span class="text-gray-500">${{ agent.estimatedCost.toFixed(2) }}</span>
-      </template>
     </div>
   </div>
 </template>
@@ -99,14 +113,28 @@ const contextColor = computed(() => {
   const pct = props.agent.contextPct ?? 0
   if (pct > 80) return 'text-red-400'
   if (pct > 50) return 'text-amber-400'
-  return 'text-gray-500'
+  return 'text-emerald-400'
+})
+
+const contextBarColor = computed(() => {
+  const pct = props.agent.contextPct ?? 0
+  if (pct > 80) return 'bg-red-500'
+  if (pct > 50) return 'bg-amber-500'
+  return 'bg-emerald-500'
 })
 
 const rateColor = computed(() => {
   const pct = props.agent.rateLimitPct ?? 0
   if (pct > 80) return 'text-red-400'
   if (pct > 50) return 'text-amber-400'
-  return 'text-gray-500'
+  return 'text-blue-400'
+})
+
+const rateBarColor = computed(() => {
+  const pct = props.agent.rateLimitPct ?? 0
+  if (pct > 80) return 'bg-red-500'
+  if (pct > 50) return 'bg-amber-500'
+  return 'bg-blue-500'
 })
 </script>
 

@@ -145,8 +145,11 @@ public class AgentsController : ControllerBase
 
     /// <summary>Called by the Statusline hook with structured usage JSON.</summary>
     [HttpPost("{id}/hook/statusline")]
-    public async Task<IActionResult> HookStatusline(string id, [FromBody] JsonElement body)
+    public async Task<IActionResult> HookStatusline(string id, [FromBody] JsonElement body,
+        [FromServices] ILogger<AgentsController> logger)
     {
+        logger.LogInformation("Statusline for {AgentId}: {Keys}",
+            id, string.Join(", ", body.EnumerateObject().Select(p => p.Name)));
         int? contextPct = null;
         double? cost = null;
         int? rateLimitPct = null;
