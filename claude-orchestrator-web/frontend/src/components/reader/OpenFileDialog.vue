@@ -19,7 +19,7 @@
           class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded"
           @click="pasteFromClipboard"
         >Paste from clipboard</button>
-        <label class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded cursor-pointer">
+        <label class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded cursor-pointer" @click="onBrowseClick">
           Browse…
           <input type="file" class="hidden" accept=".md,.markdown,.mdx,.txt" @change="onBrowse" />
         </label>
@@ -45,6 +45,7 @@
 
 <script setup>
 import { ref, watch } from 'vue'
+import { isSupported as fsaSupported, pickFileWithHandle } from '../../services/fsaStore.js'
 
 const props = defineProps({ open: Boolean })
 const emit = defineEmits(['submit', 'submit-file', 'close'])
@@ -65,9 +66,22 @@ async function pasteFromClipboard() {
   } catch {}
 }
 
+// When FSA API is available, intercept the label click and use showOpenFilePicker
+// so we can capture a FileSystemFileHandle for persistent reopen.
+async function onBrowseClick(e) {
+  if (!fsaSupported()) return  // fall through to native <input type="file">
+  e.preventDefault()
+  try {
+    const res = await pickFileWithHandle()
+    if (res) emit('submit-file', res.file, res.handle)
+  } catch (err) {
+    console.error(err)
+  }
+}
+
 function onBrowse(e) {
   const f = e.target.files?.[0]
-  if (f) emit('submit-file', f)  // open directly in lite mode — browser won't give full path
-  e.target.value = ''             // reset so selecting the same file again still fires change
+  if (f) emit('submit-file', f, null)  // no FSA handle — lite reopen will need another picker
+  e.target.value = ''
 }
 </script>

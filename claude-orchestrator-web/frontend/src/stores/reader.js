@@ -67,11 +67,16 @@ export const useReaderStore = defineStore('reader', () => {
       : `lite:${entry.displayName}`
   }
 
-  function addRecent(path, displayName, mode = 'full') {
-    const entry = { path, displayName, openedAt: Date.now(), mode }
+  function addRecent(path, displayName, mode = 'full', fsaKey = null) {
+    const entry = { path, displayName, openedAt: Date.now(), mode, fsaKey }
     const key = recentKey(entry)
     const existingIdx = recentFiles.value.findIndex(r => recentKey(r) === key)
-    if (existingIdx >= 0) recentFiles.value.splice(existingIdx, 1)
+    if (existingIdx >= 0) {
+      // Preserve fsaKey if we're replacing an entry that had one and the new call doesn't
+      const prev = recentFiles.value[existingIdx]
+      if (!fsaKey && prev.fsaKey) entry.fsaKey = prev.fsaKey
+      recentFiles.value.splice(existingIdx, 1)
+    }
     recentFiles.value.unshift(entry)
     if (recentFiles.value.length > 20) recentFiles.value.length = 20
   }
@@ -156,7 +161,7 @@ export const useReaderStore = defineStore('reader', () => {
     })
   }
 
-  async function openFromFile(file) {
+  async function openFromFile(file, fsaKey = null) {
     const content = await readFile(file)
     if (content.length > LARGE_THRESHOLD) {
       const ok = globalThis.confirm(
@@ -167,7 +172,7 @@ export const useReaderStore = defineStore('reader', () => {
     const id = addTab({
       path: null, content, mtime: null, mode: 'lite', displayName: file.name,
     })
-    addRecent(null, file.name, 'lite')
+    addRecent(null, file.name, 'lite', fsaKey)
     return id
   }
 

@@ -57,6 +57,7 @@
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import * as signalR from '@microsoft/signalr'
 import { useReaderStore } from '../stores/reader.js'
+import * as fsa from '../services/fsaStore.js'
 import ReaderToolbar from '../components/reader/ReaderToolbar.vue'
 import ReaderTabs from '../components/reader/ReaderTabs.vue'
 import ReaderSidebar from '../components/reader/ReaderSidebar.vue'
@@ -118,19 +119,38 @@ async function onSubmitPath(path) {
   catch (e) { alert(`Open failed: ${e.message}`) }
 }
 
-async function onFileDropped(file) {
+async function onFileDropped(file, handle) {
   const name = file.name.toLowerCase()
   if (!/\.(md|markdown|mdx|txt)$/.test(name)) {
     alert('Only .md/.markdown/.mdx/.txt supported')
     return
   }
-  try { await store.openFromFile(file) }
+  let fsaKey = null
+  if (handle && fsa.isSupported()) {
+    try {
+      fsaKey = fsa.generateKey()
+      await fsa.saveHandle(fsaKey, handle)
+    } catch {
+      fsaKey = null
+    }
+  }
+  try { await store.openFromFile(file, fsaKey) }
   catch (e) { alert(`Open failed: ${e.message}`) }
 }
 
-async function onSubmitFile(file) {
+async function onSubmitFile(file, handle) {
   dialogOpen.value = false
-  try { await store.openFromFile(file) }
+  let fsaKey = null
+  if (handle && fsa.isSupported()) {
+    try {
+      fsaKey = fsa.generateKey()
+      await fsa.saveHandle(fsaKey, handle)
+    } catch (err) {
+      console.warn('FSA handle save failed:', err)
+      fsaKey = null
+    }
+  }
+  try { await store.openFromFile(file, fsaKey) }
   catch (e) { alert(`Open failed: ${e.message}`) }
 }
 
@@ -138,7 +158,19 @@ async function openRecent(entry) {
   // Back-compat: string argument (legacy full-mode path)
   if (typeof entry === 'string') entry = { path: entry, mode: 'full' }
   if (entry.mode === 'lite' || !entry.path) {
-    // Lite mode has no stored content — re-pick the file via the hidden input
+    // Try FSA handle first for one-click reopen (maybe with a permission prompt)
+    if (entry.fsaKey && fsa.isSupported()) {
+      try {
+        const res = await fsa.reopenFromHandle(entry.fsaKey)
+        if (res) {
+          await store.openFromFile(res.file, entry.fsaKey)
+          return
+        }
+      } catch (err) {
+        console.warn('FSA reopen failed, falling back to file picker:', err)
+      }
+    }
+    // No handle, permission denied, or FSA unsupported — fall back to file picker
     litePicker.value?.click()
     return
   }
@@ -153,6 +185,7 @@ function onRemoveRecent(entry) {
   if (typeof entry === 'string') { store.removeRecent(entry); return }
   const key = entry.mode === 'lite' ? `lite:${entry.displayName}` : `full:${entry.path}`
   store.removeRecent(key)
+  if (entry.fsaKey) fsa.deleteHandle(entry.fsaKey).catch(() => {})
 }
 
 async function onLitePickerChange(e) {

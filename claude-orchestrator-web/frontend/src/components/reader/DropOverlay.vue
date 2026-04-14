@@ -24,10 +24,22 @@ function onEnter(e) {
   if (Array.from(e.dataTransfer?.types || []).includes('Files')) active.value = true
 }
 function onLeave() { active.value = false }
-function onDrop(e) {
+async function onDrop(e) {
   active.value = false
+  const items = e.dataTransfer?.items
+  // Try to extract a FileSystemFileHandle (Chromium 86+) for persistent reopen
+  if (items && items.length && typeof items[0].getAsFileSystemHandle === 'function') {
+    try {
+      const handle = await items[0].getAsFileSystemHandle()
+      if (handle && handle.kind === 'file') {
+        const file = await handle.getFile()
+        emit('file-dropped', file, handle)
+        return
+      }
+    } catch {}
+  }
   const file = e.dataTransfer?.files?.[0]
-  if (file) emit('file-dropped', file)
+  if (file) emit('file-dropped', file, null)
 }
 
 // Hook window-level drag so the overlay can catch drops anywhere on the view
