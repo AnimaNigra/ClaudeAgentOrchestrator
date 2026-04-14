@@ -53,6 +53,28 @@ export function createRenderer({ mode, basePath }) {
       : self.renderToken(tokens, idx, options)
   }
 
+  // Image src rewriting
+  const defaultImageRender = md.renderer.rules.image
+    || function (tokens, idx, options, env, self) { return self.renderToken(tokens, idx, options) }
+
+  md.renderer.rules.image = function (tokens, idx, options, env, self) {
+    const token = tokens[idx]
+    const srcIndex = token.attrIndex('src')
+    const src = srcIndex >= 0 ? token.attrs[srcIndex][1] : ''
+    if (isAbsoluteUrl(src)) {
+      return defaultImageRender(tokens, idx, options, env, self)
+    }
+    if (mode === 'lite') {
+      token.attrSet('src', '')
+      token.attrSet('data-placeholder', 'lite-mode')
+      token.attrSet('title', 'Image not loaded — lite mode (drag-drop). Open via path dialog for images.')
+    } else {
+      const resolved = resolveRelative(basePath, src)
+      token.attrs[srcIndex][1] = `/api/reader/raw?path=${encodeURIComponent(resolved)}`
+    }
+    return defaultImageRender(tokens, idx, options, env, self)
+  }
+
   return {
     render(src) {
       headings = []
@@ -60,6 +82,27 @@ export function createRenderer({ mode, basePath }) {
       return { html, headings: [...headings] }
     },
   }
+}
+
+function isAbsoluteUrl(s) {
+  return /^(https?:|data:|blob:|\/)/.test(s)
+}
+
+function resolveRelative(base, rel) {
+  if (!base) return rel
+  // Normalise separators to '/'; allow backslashes in input (Windows paths).
+  const b = base.replace(/\\/g, '/').replace(/\/+$/, '')
+  const r = rel.replace(/\\/g, '/').replace(/^\.\//, '')
+  // Walk '..' segments
+  const parts = (b + '/' + r).split('/')
+  const out = []
+  for (const p of parts) {
+    if (p === '..') out.pop()
+    else if (p !== '.' && p !== '') out.push(p)
+  }
+  // Preserve leading separator for non-Windows absolute paths
+  const leading = b.startsWith('/') ? '/' : ''
+  return leading + out.join('/')
 }
 
 function escapeHtml(s) {

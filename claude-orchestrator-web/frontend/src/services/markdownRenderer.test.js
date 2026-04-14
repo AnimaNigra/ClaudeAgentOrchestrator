@@ -35,3 +35,34 @@ describe('markdownRenderer (base)', () => {
     expect(html).toContain('&lt;script&gt;')
   })
 })
+
+describe('markdownRenderer (images + mermaid)', () => {
+  it('rewrites relative image src to /api/reader/raw in full mode', () => {
+    const r = createRenderer({ mode: 'full', basePath: 'C:/docs' })
+    const { html } = r.render('![alt](./img.png)')
+    // Path-separator-agnostic: we expect basePath + img.png in the query
+    expect(html).toMatch(/\/api\/reader\/raw\?path=/)
+    expect(decodeURIComponent(html)).toContain('C:/docs')
+    expect(decodeURIComponent(html)).toContain('img.png')
+  })
+
+  it('leaves absolute URLs untouched in full mode', () => {
+    const r = createRenderer({ mode: 'full', basePath: 'C:/docs' })
+    const { html } = r.render('![alt](https://example.com/x.png)')
+    expect(html).toContain('src="https://example.com/x.png"')
+  })
+
+  it('replaces relative image with placeholder in lite mode', () => {
+    const r = createRenderer({ mode: 'lite', basePath: null })
+    const { html } = r.render('![alt](./img.png)')
+    expect(html).toContain('data-placeholder="lite-mode"')
+    expect(html).not.toContain('./img.png')
+  })
+
+  it('transforms ```mermaid fenced block into <div class="mermaid">', () => {
+    const r = createRenderer({ mode: 'full', basePath: '/docs' })
+    const { html } = r.render('```mermaid\ngraph TD\nA-->B\n```')
+    expect(html).toContain('<div class="mermaid">')
+    expect(html).toContain('graph TD')
+  })
+})
