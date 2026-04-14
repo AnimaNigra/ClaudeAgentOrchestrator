@@ -151,6 +151,15 @@ else
 app.UseCors();
 app.MapControllers();
 app.MapHub<AgentHub>("/hubs/agents");
+app.MapHub<ClaudeOrchestrator.Hubs.ReaderHub>("/hubs/reader");
+
+// Wire file-watcher events to the reader hub
+var readerHub = app.Services.GetRequiredService<IHubContext<ClaudeOrchestrator.Hubs.ReaderHub>>();
+var watcher = app.Services.GetRequiredService<ClaudeOrchestrator.Services.FileWatcherService>();
+watcher.FileChanged += (path, mtime) =>
+    readerHub.Clients.All.SendAsync("FileChanged", path, mtime);
+watcher.WatchFailed += path =>
+    readerHub.Clients.All.SendAsync("WatchFailed", path);
 
 // Kill Vite on shutdown
 app.Services.GetRequiredService<IHostApplicationLifetime>()
