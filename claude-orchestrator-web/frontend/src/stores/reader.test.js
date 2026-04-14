@@ -136,3 +136,59 @@ describe('reader store — misc setters', () => {
     expect(s.tabs[0].headings).toEqual([{ level: 1, text: 'T', id: 't' }])
   })
 })
+
+describe('reader store — persistence', () => {
+  const KEY = 'claude-orchestrator-reader-state-v1'
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+  })
+
+  it('persist writes full tabs (without content), recent, width', () => {
+    const s = useReaderStore()
+    s.addTab({ path: '/a.md', displayName: 'a.md', content: 'XX', mode: 'full', mtime: 7 })
+    s.addTab({ path: null, displayName: 'b.md', content: 'YY', mode: 'lite' }) // lite NOT persisted
+    s.addRecent('/a.md', 'a.md')
+    s.setSidebarWidth(333)
+    s.persist()
+    const raw = JSON.parse(localStorage.getItem(KEY))
+    expect(raw.tabs.length).toBe(1)
+    expect(raw.tabs[0].path).toBe('/a.md')
+    expect(raw.tabs[0].content).toBeUndefined()
+    expect(raw.recentFiles.length).toBe(1)
+    expect(raw.sidebarWidth).toBe(333)
+  })
+
+  it('hydrate restores recent + width and tab stubs (content empty pending re-fetch)', () => {
+    localStorage.setItem(KEY, JSON.stringify({
+      tabs: [{ id: 'x', path: '/a.md', displayName: 'a.md', mtime: 1, mode: 'full' }],
+      activeTabId: 'x',
+      recentFiles: [{ path: '/a.md', displayName: 'a.md', openedAt: 1 }],
+      sidebarWidth: 400,
+    }))
+    const s = useReaderStore()
+    s.hydrate()
+    expect(s.tabs.length).toBe(1)
+    expect(s.tabs[0].content).toBe('')
+    expect(s.tabs[0].headings).toEqual([])
+    expect(s.activeTabId).toBe('x')
+    expect(s.sidebarWidth).toBe(400)
+    expect(s.recentFiles.length).toBe(1)
+  })
+
+  it('hydrate tolerates corrupt JSON', () => {
+    localStorage.setItem(KEY, '<<not json>>')
+    const s = useReaderStore()
+    expect(() => s.hydrate()).not.toThrow()
+    expect(s.tabs.length).toBe(0)
+  })
+
+  it('hydrate tolerates missing fields', () => {
+    localStorage.setItem(KEY, JSON.stringify({ tabs: [] }))
+    const s = useReaderStore()
+    s.hydrate()
+    expect(s.sidebarWidth).toBe(260) // default
+    expect(s.recentFiles).toEqual([])
+  })
+})

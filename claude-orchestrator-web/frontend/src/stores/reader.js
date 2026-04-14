@@ -79,11 +79,47 @@ export const useReaderStore = defineStore('reader', () => {
     if (tab) tab.headings = headings
   }
 
+  const STORAGE_KEY = 'claude-orchestrator-reader-state-v1'
+
+  function persist() {
+    const payload = {
+      tabs: tabs.value
+        .filter(t => t.mode === 'full' && t.path)
+        .map(({ content, headings, scrollY, ...rest }) => rest),
+      activeTabId: activeTabId.value,
+      recentFiles: recentFiles.value,
+      sidebarWidth: sidebarWidth.value,
+    }
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)) } catch {}
+  }
+
+  function hydrate() {
+    let raw
+    try { raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') } catch { raw = null }
+    if (!raw || typeof raw !== 'object') return
+    if (Array.isArray(raw.tabs)) {
+      tabs.value = raw.tabs.map(t => ({
+        id: t.id,
+        path: t.path ?? null,
+        displayName: t.displayName ?? 'Untitled',
+        content: '',
+        mtime: t.mtime ?? null,
+        mode: 'full',
+        headings: [],
+        scrollY: 0,
+      }))
+    }
+    if (typeof raw.activeTabId === 'string') activeTabId.value = raw.activeTabId
+    if (Array.isArray(raw.recentFiles)) recentFiles.value = raw.recentFiles
+    if (typeof raw.sidebarWidth === 'number') sidebarWidth.value = raw.sidebarWidth
+  }
+
   return {
     tabs, activeTabId, recentFiles, sidebarWidth,
     activeTab,
     addTab, closeTab, activateTab,
     addRecent, removeRecent,
     setSidebarWidth, setScrollY, updateTabHeadings,
+    persist, hydrate,
   }
 })
