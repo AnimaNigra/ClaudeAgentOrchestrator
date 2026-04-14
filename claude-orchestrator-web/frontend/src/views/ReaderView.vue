@@ -74,11 +74,25 @@ let persistTimer = null
 
 onMounted(async () => {
   store.hydrate()
-  // Re-fetch content for any persisted full-mode tabs
-  for (const t of store.tabs) {
+  // Re-fetch content for any persisted full-mode tabs.
+  // If a file is gone from disk, drop the tab (and its recent entry) so the
+  // user doesn't see a blank, unloadable tab.
+  const missing = []
+  for (const t of [...store.tabs]) {
     if (t.mode === 'full' && t.path) {
-      try { await store.openFromPath(t.path) } catch {}
+      try { await store.openFromPath(t.path) }
+      catch {
+        missing.push(t.path)
+        store.closeTab(t.id)
+        store.removeRecent(`full:${t.path}`)
+      }
     }
+  }
+  if (missing.length) {
+    alert(
+      `${missing.length === 1 ? 'Previously opened file is' : 'Previously opened files are'} no longer available:\n\n` +
+      missing.map(p => '• ' + p).join('\n')
+    )
   }
   connection = new signalR.HubConnectionBuilder().withUrl('/hubs/reader').withAutomaticReconnect().build()
   connection.on('FileChanged', (path, mtime) => store.handleFileChanged(path, mtime))
@@ -129,7 +143,10 @@ async function openRecent(entry) {
     return
   }
   try { await store.openFromPath(entry.path) }
-  catch { store.removeRecent(entry.path) }
+  catch (e) {
+    store.removeRecent(`full:${entry.path}`)
+    alert(`Cannot open: ${e.message}\n\nRemoved from Recent.`)
+  }
 }
 
 function onRemoveRecent(entry) {
