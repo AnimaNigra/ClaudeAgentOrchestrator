@@ -6,8 +6,8 @@
     >📂 Open file</button>
     <button
       class="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded text-gray-200"
-      @click="$emit('export-pdf')"
-    >⤓ Export PDF</button>
+      @click="$emit('print')"
+    >🖨 Print</button>
     <div class="flex-1 min-w-0">
       <slot name="tabs" />
     </div>
@@ -15,5 +15,5 @@
 </template>
 
 <script setup>
-defineEmits(['open', 'export-pdf'])
+defineEmits(['open', 'print'])
 </script>

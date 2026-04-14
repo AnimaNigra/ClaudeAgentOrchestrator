@@ -1,6 +1,6 @@
 <template>
   <div class="relative flex flex-col flex-1 overflow-hidden">
-    <ReaderToolbar @open="dialogOpen = true" @export-pdf="printPdf">
+    <ReaderToolbar @open="dialogOpen = true" @print="printPdf">
       <template #tabs>
         <ReaderTabs
           :tabs="store.tabs"
