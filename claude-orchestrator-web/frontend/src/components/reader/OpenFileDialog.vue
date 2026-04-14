@@ -37,7 +37,7 @@
         >Open</button>
       </div>
       <p class="text-[10px] text-gray-500 mt-2">
-        Browse fills the filename only (browser security limitation) — paste the directory before it.
+        <b>Path</b>: full mode with images + live reload. <b>Browse</b>: quick lite-mode preview (images disabled — browser security hides the full path).
       </p>
     </div>
   </div>
@@ -47,7 +47,7 @@
 import { ref, watch } from 'vue'
 
 const props = defineProps({ open: Boolean })
-const emit = defineEmits(['submit', 'close'])
+const emit = defineEmits(['submit', 'submit-file', 'close'])
 const path = ref('')
 
 watch(() => props.open, (v) => { if (v) path.value = '' })
@@ -67,6 +67,7 @@ async function pasteFromClipboard() {
 
 function onBrowse(e) {
   const f = e.target.files?.[0]
-  if (f) path.value = f.name  // browser cannot give full path; user must prepend dir
+  if (f) emit('submit-file', f)  // open directly in lite mode — browser won't give full path
+  e.target.value = ''             // reset so selecting the same file again still fires change
 }
 </script>

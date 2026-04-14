@@ -36,7 +36,12 @@
       </div>
     </div>
 
-    <OpenFileDialog :open="dialogOpen" @close="dialogOpen = false" @submit="onSubmitPath" />
+    <OpenFileDialog
+      :open="dialogOpen"
+      @close="dialogOpen = false"
+      @submit="onSubmitPath"
+      @submit-file="onSubmitFile"
+    />
   </div>
 </template>
 
@@ -96,6 +101,12 @@ async function onFileDropped(file) {
     alert('Only .md/.markdown/.mdx/.txt supported')
     return
   }
+  try { await store.openFromFile(file) }
+  catch (e) { alert(`Open failed: ${e.message}`) }
+}
+
+async function onSubmitFile(file) {
+  dialogOpen.value = false
   try { await store.openFromFile(file) }
   catch (e) { alert(`Open failed: ${e.message}`) }
 }

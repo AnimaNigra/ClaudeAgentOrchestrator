@@ -33,4 +33,15 @@ describe('OpenFileDialog', () => {
     const w = mount(OpenFileDialog, { props: { open: false } })
     expect(w.find('[data-testid="open-submit"]').exists()).toBe(false)
   })
+
+  it('emits submit-file with the File when Browse picks one', async () => {
+    const w = mount(OpenFileDialog, { props: { open: true } })
+    const file = new File(['# hi'], 'note.md', { type: 'text/markdown' })
+    const input = w.find('input[type="file"]').element
+    Object.defineProperty(input, 'files', { value: [file], configurable: true })
+    await w.find('input[type="file"]').trigger('change')
+    expect(w.emitted('submit-file')?.[0]?.[0]).toBe(file)
+    // Path input should NOT be filled (Browse now opens directly in lite mode)
+    expect(w.get('[data-testid="open-path-input"]').element.value).toBe('')
+  })
 })
