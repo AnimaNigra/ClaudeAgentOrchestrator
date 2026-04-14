@@ -16,6 +16,7 @@ A web-based dashboard for managing multiple [Claude Code](https://docs.anthropic
 - **Desktop notifications** &mdash; sound + system notification when an agent goes idle
 - **PWA** &mdash; installable as a standalone app from the browser
 - **Priority list** &mdash; drag-and-drop task notepad with JSON persistence
+- **Markdown Reader** &mdash; open `.md` / `.txt` files via path, drag-drop, or browse; renders GitHub-style Markdown with Mermaid diagrams, syntax highlighting, relative images, TOC with scroll-spy, multi-tab state, live reload, and print-to-PDF
 
 ## Quick Start
 
@@ -83,6 +84,23 @@ Every tool call from Claude is intercepted via a `PreToolUse` hook and displayed
 
 Click the microphone button (bottom-right of the terminal) to dictate prompts using Web Speech API (Chrome/Edge). Optionally attach an image before sending.
 
+### Markdown Reader
+
+Open the **Reader** tab to read Markdown files (design specs, plans, notes) next to your agents without leaving the app.
+
+**Opening files &mdash; two modes:**
+
+- **Full mode** &mdash; click **Open file** and paste an absolute path. The backend serves the content, resolves relative images (`![](./img.png)` works), and watches the file on disk &mdash; the preview auto-refreshes when the file changes.
+- **Lite mode** &mdash; drag-and-drop a file into the Reader, or use **Browse**. The file is read client-side via the File API. On Chromium browsers (Chrome/Edge) the handle is persisted so **clicking the file in Recent reopens it with a single permission prompt**. On Firefox/Safari the Recent click re-opens the system file picker.
+
+**Features:**
+
+- Mermaid.js diagrams, `highlight.js` syntax highlighting, bordered tables, dark-theme typography
+- Multi-tab state persisted in `localStorage` &mdash; tabs come back after reload (full mode re-fetches content)
+- Left sidebar with scroll-spy TOC and Recent files (resizable handle)
+- **🖨 Print** button generates a paginated, light-theme print view with no app chrome &mdash; save as PDF via the browser print dialog (tip: turn off "Headers and footers" in **More settings**)
+- 5 MB file size guard with confirmation prompt
+
 ## Architecture
 
 ```
@@ -92,13 +110,15 @@ Browser (Vue 3 + Pinia + xterm.js)
   ├── PermissionDialog    — tool approval modal (PreToolUse hook)
   ├── VoiceDictateDialog  — speech-to-text with image attachments
   ├── WorktreesView       — git worktree manager
-  └── HistoryView         — grouped session history with resume
+  ├── HistoryView         — grouped session history with resume
+  └── ReaderView          — Markdown reader with Mermaid + TOC + multi-tab
 
 ASP.NET Core 9 (SignalR + REST)
   ├── AgentManager        — agent lifecycle, permission queue
   ├── PtySession          — PTY management via node-pty proxy
   ├── WorktreeService     — git worktree add/list/remove
   ├── AgentHistoryService — session persistence with auto-cleanup
+  ├── FileWatcherService  — Reader live-reload via FileSystemWatcher → SignalR
   └── Hook injection      — injects/removes hooks in .claude/settings.local.json
 
 pty-proxy (Node.js)
@@ -129,7 +149,7 @@ Or via environment variable: `Port=8080`
 ## Tech Stack
 
 - **Backend:** ASP.NET Core 9, SignalR, node-pty (via Node.js proxy)
-- **Frontend:** Vue 3 (Composition API), Pinia, xterm.js, Tailwind CSS, Web Speech API
+- **Frontend:** Vue 3 (Composition API), Pinia, xterm.js, Tailwind CSS, Web Speech API, markdown-it + Mermaid.js + highlight.js (Reader), File System Access API
 - **Build:** Vite, vite-plugin-pwa
 - **Persistence:** JSON files (`data/agents.json`, `data/priorities.json`)
 
