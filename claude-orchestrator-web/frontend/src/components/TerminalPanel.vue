@@ -15,7 +15,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -127,25 +127,39 @@ function mountTerminal(agentId, el) {
 
   // If this is the active agent, fit immediately (element is visible)
   if (agentId === activeAgentId.value) {
-    nextTick(() => {
-      fitAddon.fit()
-      notifyResize(agentId, fitAddon)
-      terminal.focus()
-    })
+    refitAndScroll(agentId, { focus: true })
   }
+}
+
+// Fit the terminal after layout has actually painted (rAF), scroll to the
+// latest output, and re-fit once more on the next frame. The double-fit
+// compensates for cases where the first measurement caught a stale layout
+// (e.g. v-show flip, window resize landing mid-frame). Without this, xterm's
+// viewport can end up smaller than available space — the scrollbar then
+// disappears and recent output appears "cut off".
+function refitAndScroll(agentId, { focus = false } = {}) {
+  requestAnimationFrame(() => {
+    const t = terminals[agentId]
+    if (!t) return
+    try { t.fitAddon.fit() } catch {}
+    notifyResize(agentId, t.fitAddon)
+    try { t.terminal.scrollToBottom() } catch {}
+    if (focus) try { t.terminal.focus() } catch {}
+    // Second fit on the next frame — catches late layout settles
+    requestAnimationFrame(() => {
+      const t2 = terminals[agentId]
+      if (!t2) return
+      try { t2.fitAddon.fit() } catch {}
+      notifyResize(agentId, t2.fitAddon)
+      try { t2.terminal.scrollToBottom() } catch {}
+    })
+  })
 }
 
 // Resize active terminal when switching agents
 watch(activeAgentId, newId => {
   if (!newId) return
-  nextTick(() => {
-    const t = terminals[newId]
-    if (t) {
-      t.fitAddon.fit()
-      notifyResize(newId, t.fitAddon)
-      t.terminal.focus()
-    }
-  })
+  refitAndScroll(newId, { focus: true })
 })
 
 function notifyResize(agentId, fitAddon) {
@@ -159,19 +173,23 @@ function notifyResize(agentId, fitAddon) {
 
 // Resize terminal on container size change
 let resizeObs = null
+let resizeDebounce = null
 onMounted(() => {
   if (!containerRef.value) return
   resizeObs = new ResizeObserver(() => {
     const id = activeAgentId.value
     if (!id || !terminals[id]) return
-    terminals[id].fitAddon.fit()
-    notifyResize(id, terminals[id].fitAddon)
+    // Debounce so a flurry of resize events (drag, window resize) settles
+    // before we compute final dimensions.
+    clearTimeout(resizeDebounce)
+    resizeDebounce = setTimeout(() => refitAndScroll(id), 50)
   })
   resizeObs.observe(containerRef.value)
 })
 
 onUnmounted(() => {
   resizeObs?.disconnect()
+  clearTimeout(resizeDebounce)
   Object.values(terminals).forEach(({ terminal }) => terminal.dispose())
 })
 </script>
