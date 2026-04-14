@@ -111,6 +111,12 @@ onBeforeUnmount(async () => {
   try { await connection?.stop() } catch {}
 })
 
+// Track per-tab content size as an extra change signal — editors that do
+// atomic saves (rename) can leave lastModified stale relative to the handle's
+// in-memory view, but the re-read File's size is almost always different
+// when content changed.
+const liteSizeCache = new Map() // tabId → last known byte size
+
 async function pollLiteTabs() {
   if (!fsa.isSupported()) return
   for (const tab of store.tabs) {
@@ -118,16 +124,26 @@ async function pollLiteTabs() {
     try {
       const handle = await fsa.getHandle(tab.fsaKey)
       if (!handle) continue
-      // Must have prior permission — don't prompt during polling
-      const perm = await handle.queryPermission({ mode: 'read' })
-      if (perm !== 'granted') continue
+      // Don't gate on queryPermission — handles from drag-drop / showOpenFilePicker
+      // sometimes report 'prompt' even with implicit grant. Just try getFile();
+      // a real permission failure throws and lands in the catch.
       const file = await handle.getFile()
-      if (file.lastModified && file.lastModified !== tab.mtime) {
+      const prevSize = liteSizeCache.get(tab.id)
+      const mtime = file.lastModified || 0
+      const size = file.size
+      const changed = (mtime && mtime !== tab.mtime) || (prevSize !== undefined && prevSize !== size)
+      if (changed) {
         const content = await file.text()
-        store.updateLiteTabContent(tab.id, content, file.lastModified)
+        store.updateLiteTabContent(tab.id, content, mtime || Date.now())
+        if (import.meta.env.DEV) {
+          console.log('[reader-poll] refreshed', tab.displayName, 'mtime', mtime, 'size', size)
+        }
       }
-    } catch {
-      // File likely deleted/renamed — skip this tick; next one may recover
+      liteSizeCache.set(tab.id, size)
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.warn('[reader-poll] skip', tab.displayName, err?.name || err?.message || err)
+      }
     }
   }
 }
