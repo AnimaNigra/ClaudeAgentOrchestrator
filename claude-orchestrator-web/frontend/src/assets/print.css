@@ -1,40 +1,119 @@
+/* Print layout for the Reader.
+   Activated by adding `printing-reader` to <body> before window.print() (see
+   ReaderView.vue). Uses the visibility trick to hide everything except the
+   rendered Markdown, then positions the preview absolutely so it can flow
+   across pages without being clipped by the app's overflow: hidden containers. */
+
 @media print {
-  /* Hide app chrome */
-  header,
-  nav,
-  aside,
-  [data-testid="reader-tab"],
-  [data-testid="reader-tab-new"],
-  .reader-preview [data-testid="drop-overlay"],
-  .fixed { /* dialogs/overlays */
-    display: none !important;
+  @page {
+    size: auto;
+    margin: 15mm 12mm;
   }
 
-  /* Expand the preview to the full page */
-  .reader-preview {
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
     overflow: visible !important;
     height: auto !important;
-    padding: 0 !important;
   }
 
-  .reader-md {
+  /* Hide the entire app chrome (toolbar, tabs, sidebar, overlays, dialogs, …) */
+  body.printing-reader * {
+    visibility: hidden !important;
+  }
+
+  /* Re-show only the rendered markdown article */
+  body.printing-reader .reader-md,
+  body.printing-reader .reader-md * {
+    visibility: visible !important;
+  }
+
+  /* Detach the article from the scroll container so its full height prints
+     across multiple pages instead of being clipped by overflow: hidden. */
+  body.printing-reader .reader-md {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 100%;
+    padding: 0;
+    margin: 0;
     color: #000 !important;
     background: #fff !important;
     font-size: 11pt;
   }
 
-  .reader-md :deep(pre), .reader-md pre {
-    page-break-inside: avoid;
-    border: 1px solid #ccc;
-    background: #f7f7f7 !important;
+  /* Light-theme typography for print */
+  body.printing-reader .reader-md h1,
+  body.printing-reader .reader-md h2,
+  body.printing-reader .reader-md h3,
+  body.printing-reader .reader-md h4,
+  body.printing-reader .reader-md h5,
+  body.printing-reader .reader-md h6,
+  body.printing-reader .reader-md strong,
+  body.printing-reader .reader-md em,
+  body.printing-reader .reader-md p,
+  body.printing-reader .reader-md li,
+  body.printing-reader .reader-md td,
+  body.printing-reader .reader-md th {
     color: #000 !important;
   }
+  body.printing-reader .reader-md h1 { border-color: #9ca3af !important; }
+  body.printing-reader .reader-md h2 { border-color: #d1d5db !important; }
 
-  .reader-md :deep(img), .reader-md img,
-  .reader-md :deep(.mermaid), .reader-md .mermaid {
+  body.printing-reader .reader-md a {
+    color: #1d4ed8 !important;
+    text-decoration: underline;
+  }
+
+  body.printing-reader .reader-md code {
+    color: #111827 !important;
+    background: #f3f4f6 !important;
+    border-color: #d1d5db !important;
+  }
+
+  body.printing-reader .reader-md pre {
+    color: #111827 !important;
+    background: #f9fafb !important;
+    border: 1px solid #d1d5db !important;
+    page-break-inside: avoid;
+  }
+  body.printing-reader .reader-md pre code {
+    color: inherit !important;
+    background: transparent !important;
+  }
+
+  body.printing-reader .reader-md blockquote {
+    color: #374151 !important;
+    background: #f9fafb !important;
+    border-left-color: #3b82f6 !important;
+  }
+
+  body.printing-reader .reader-md table {
+    display: table;            /* override scrollable display:block from screen CSS */
+    overflow: visible;
+    width: auto;
+    max-width: 100%;
+  }
+  body.printing-reader .reader-md thead {
+    background: #e5e7eb !important;
+  }
+  body.printing-reader .reader-md tbody tr:nth-child(even) {
+    background: #f9fafb !important;
+  }
+  body.printing-reader .reader-md th,
+  body.printing-reader .reader-md td {
+    border-color: #d1d5db !important;
+  }
+
+  body.printing-reader .reader-md img,
+  body.printing-reader .reader-md .mermaid {
     page-break-inside: avoid;
     max-width: 100%;
   }
 
-  body { background: #fff !important; }
+  body.printing-reader .reader-md hr {
+    border-color: #9ca3af !important;
+  }
 }
