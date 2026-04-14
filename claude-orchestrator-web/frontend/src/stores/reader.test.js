@@ -77,3 +77,62 @@ describe('reader store — tab lifecycle', () => {
     expect(s.activeTab.id).toBe(a)
   })
 })
+
+describe('reader store — recent files', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('adds to recent with openedAt and dedupes by path', () => {
+    const s = useReaderStore()
+    s.addRecent('/a.md', 'a.md')
+    s.addRecent('/b.md', 'b.md')
+    s.addRecent('/a.md', 'a.md')
+    expect(s.recentFiles.length).toBe(2)
+    // most recent first
+    expect(s.recentFiles[0].path).toBe('/a.md')
+    expect(s.recentFiles[1].path).toBe('/b.md')
+  })
+
+  it('caps recent at 20 entries, dropping oldest', () => {
+    const s = useReaderStore()
+    for (let i = 0; i < 25; i++) s.addRecent(`/f${i}.md`, `f${i}.md`)
+    expect(s.recentFiles.length).toBe(20)
+    expect(s.recentFiles[0].path).toBe('/f24.md')
+    expect(s.recentFiles[19].path).toBe('/f5.md')
+  })
+
+  it('removeRecent deletes by path', () => {
+    const s = useReaderStore()
+    s.addRecent('/a.md', 'a.md')
+    s.addRecent('/b.md', 'b.md')
+    s.removeRecent('/a.md')
+    expect(s.recentFiles.map(r => r.path)).toEqual(['/b.md'])
+  })
+})
+
+describe('reader store — misc setters', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('setSidebarWidth clamps to [160, 600]', () => {
+    const s = useReaderStore()
+    s.setSidebarWidth(100)
+    expect(s.sidebarWidth).toBe(160)
+    s.setSidebarWidth(999)
+    expect(s.sidebarWidth).toBe(600)
+    s.setSidebarWidth(300)
+    expect(s.sidebarWidth).toBe(300)
+  })
+
+  it('setScrollY updates scroll on the tab', () => {
+    const s = useReaderStore()
+    const id = s.addTab({ path: '/a.md', displayName: 'a', content: '', mode: 'full' })
+    s.setScrollY(id, 420)
+    expect(s.tabs[0].scrollY).toBe(420)
+  })
+
+  it('updateTabHeadings sets headings on the tab', () => {
+    const s = useReaderStore()
+    const id = s.addTab({ path: '/a.md', displayName: 'a', content: '', mode: 'full' })
+    s.updateTabHeadings(id, [{ level: 1, text: 'T', id: 't' }])
+    expect(s.tabs[0].headings).toEqual([{ level: 1, text: 'T', id: 't' }])
+  })
+})

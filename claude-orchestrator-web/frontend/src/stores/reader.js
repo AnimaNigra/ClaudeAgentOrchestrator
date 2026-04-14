@@ -54,9 +54,36 @@ export const useReaderStore = defineStore('reader', () => {
     if (tabs.value.some(t => t.id === id)) activeTabId.value = id
   }
 
+  function addRecent(path, displayName) {
+    const existingIdx = recentFiles.value.findIndex(r => r.path === path)
+    if (existingIdx >= 0) recentFiles.value.splice(existingIdx, 1)
+    recentFiles.value.unshift({ path, displayName, openedAt: Date.now() })
+    if (recentFiles.value.length > 20) recentFiles.value.length = 20
+  }
+
+  function removeRecent(path) {
+    recentFiles.value = recentFiles.value.filter(r => r.path !== path)
+  }
+
+  function setSidebarWidth(px) {
+    sidebarWidth.value = Math.min(600, Math.max(160, Math.round(px)))
+  }
+
+  function setScrollY(id, y) {
+    const tab = tabs.value.find(t => t.id === id)
+    if (tab) tab.scrollY = y
+  }
+
+  function updateTabHeadings(id, headings) {
+    const tab = tabs.value.find(t => t.id === id)
+    if (tab) tab.headings = headings
+  }
+
   return {
     tabs, activeTabId, recentFiles, sidebarWidth,
     activeTab,
     addTab, closeTab, activateTab,
+    addRecent, removeRecent,
+    setSidebarWidth, setScrollY, updateTabHeadings,
   }
 })
