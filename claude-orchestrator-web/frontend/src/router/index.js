@@ -4,6 +4,7 @@ import TasksView from '../views/TasksView.vue'
 import HistoryView from '../views/HistoryView.vue'
 import WorktreesView from '../views/WorktreesView.vue'
 import PrioritiesView from '../views/PrioritiesView.vue'
+import ReaderView from '../views/ReaderView.vue'
 
 const routes = [
   { path: '/', component: AgentsView },
@@ -11,6 +12,7 @@ const routes = [
   { path: '/priorities', component: PrioritiesView },
   { path: '/history', component: HistoryView },
   { path: '/worktrees', component: WorktreesView },
+  { path: '/reader', component: ReaderView },
 ]
 
 export default createRouter({
