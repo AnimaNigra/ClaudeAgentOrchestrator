@@ -1,6 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useReaderStore } from './reader.js'
+import { vi } from 'vitest'
+vi.mock('../services/readerApi.js', () => ({
+  getContent: vi.fn(),
+  watch: vi.fn(),
+  unwatch: vi.fn(),
+  rawUrl: (p) => `/api/reader/raw?path=${encodeURIComponent(p)}`,
+}))
+
+import * as readerApi from '../services/readerApi.js'
 
 function mkTab(partial = {}) {
   return {
@@ -190,5 +199,73 @@ describe('reader store — persistence', () => {
     s.hydrate()
     expect(s.sidebarWidth).toBe(260) // default
     expect(s.recentFiles).toEqual([])
+  })
+})
+
+describe('reader store — async actions', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('openFromPath fetches content, adds tab, calls watch, adds recent', async () => {
+    readerApi.getContent.mockResolvedValue({ path: '/a.md', content: '# hi', mtime: 42 })
+    readerApi.watch.mockResolvedValue()
+    const s = useReaderStore()
+    const id = await s.openFromPath('/a.md')
+    expect(readerApi.getContent).toHaveBeenCalledWith('/a.md')
+    expect(readerApi.watch).toHaveBeenCalledWith('/a.md')
+    expect(s.tabs[0].content).toBe('# hi')
+    expect(s.tabs[0].mode).toBe('full')
+    expect(s.activeTabId).toBe(id)
+    expect(s.recentFiles[0].path).toBe('/a.md')
+  })
+
+  it('openFromPath propagates fetch errors and does not add a tab', async () => {
+    readerApi.getContent.mockRejectedValue(new Error('File not found'))
+    const s = useReaderStore()
+    await expect(s.openFromPath('/nope.md')).rejects.toThrow(/not found/)
+    expect(s.tabs.length).toBe(0)
+  })
+
+  it('openFromFile reads File via FileReader and adds a lite tab', async () => {
+    const file = new File(['# from disk'], 'note.md', { type: 'text/markdown' })
+    const s = useReaderStore()
+    const id = await s.openFromFile(file)
+    expect(s.tabs[0].mode).toBe('lite')
+    expect(s.tabs[0].path).toBeNull()
+    expect(s.tabs[0].displayName).toBe('note.md')
+    expect(s.tabs[0].content).toBe('# from disk')
+    expect(s.activeTabId).toBe(id)
+  })
+
+  it('handleFileChanged refetches content for matching tab and preserves scrollY', async () => {
+    readerApi.getContent.mockResolvedValueOnce({ path: '/a.md', content: 'v1', mtime: 1 })
+    readerApi.watch.mockResolvedValue()
+    const s = useReaderStore()
+    const id = await s.openFromPath('/a.md')
+    s.setScrollY(id, 123)
+    readerApi.getContent.mockResolvedValueOnce({ path: '/a.md', content: 'v2', mtime: 2 })
+    await s.handleFileChanged('/a.md', 2)
+    const t = s.tabs.find(t => t.id === id)
+    expect(t.content).toBe('v2')
+    expect(t.mtime).toBe(2)
+    expect(t.scrollY).toBe(123)
+  })
+
+  it('handleFileChanged is a no-op if no tab matches the path', async () => {
+    const s = useReaderStore()
+    await s.handleFileChanged('/unknown.md', 9)
+    expect(readerApi.getContent).not.toHaveBeenCalled()
+  })
+
+  it('closeTab on full-mode tab calls unwatch', async () => {
+    readerApi.getContent.mockResolvedValue({ path: '/a.md', content: 'x', mtime: 1 })
+    readerApi.watch.mockResolvedValue()
+    readerApi.unwatch.mockResolvedValue()
+    const s = useReaderStore()
+    const id = await s.openFromPath('/a.md')
+    s.closeTab(id)
+    expect(readerApi.unwatch).toHaveBeenCalledWith('/a.md')
   })
 })

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { v4 as uuid } from 'uuid'
+import * as readerApi from '../services/readerApi.js'
 
 export const useReaderStore = defineStore('reader', () => {
   const tabs = ref([])
@@ -42,7 +43,11 @@ export const useReaderStore = defineStore('reader', () => {
   function closeTab(id) {
     const idx = tabs.value.findIndex(t => t.id === id)
     if (idx < 0) return
+    const tab = tabs.value[idx]
     const wasActive = activeTabId.value === id
+    if (tab.mode === 'full' && tab.path) {
+      readerApi.unwatch(tab.path)?.catch(() => {})
+    }
     tabs.value.splice(idx, 1)
     if (wasActive) {
       if (tabs.value.length === 0) activeTabId.value = null
@@ -114,6 +119,47 @@ export const useReaderStore = defineStore('reader', () => {
     if (typeof raw.sidebarWidth === 'number') sidebarWidth.value = raw.sidebarWidth
   }
 
+  async function openFromPath(path) {
+    const { path: abs, content, mtime } = await readerApi.getContent(path)
+    const displayName = abs.split(/[\\/]/).pop()
+    const id = addTab({ path: abs, content, mtime, mode: 'full', displayName })
+    try { await readerApi.watch(abs) } catch {}
+    addRecent(abs, displayName)
+    return id
+  }
+
+  function readFile(file) {
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader()
+      fr.onload = () => resolve(String(fr.result ?? ''))
+      fr.onerror = () => reject(fr.error || new Error('Read failed'))
+      fr.readAsText(file)
+    })
+  }
+
+  async function openFromFile(file) {
+    const content = await readFile(file)
+    return addTab({
+      path: null,
+      content,
+      mtime: null,
+      mode: 'lite',
+      displayName: file.name,
+    })
+  }
+
+  async function handleFileChanged(path, mtime) {
+    const tab = tabs.value.find(t => t.path === path)
+    if (!tab) return
+    try {
+      const { content } = await readerApi.getContent(path)
+      tab.content = content
+      tab.mtime = mtime
+    } catch {
+      // Leave existing content in place on refetch failure
+    }
+  }
+
   return {
     tabs, activeTabId, recentFiles, sidebarWidth,
     activeTab,
@@ -121,5 +167,6 @@ export const useReaderStore = defineStore('reader', () => {
     addRecent, removeRecent,
     setSidebarWidth, setScrollY, updateTabHeadings,
     persist, hydrate,
+    openFromPath, openFromFile, handleFileChanged,
   }
 })
