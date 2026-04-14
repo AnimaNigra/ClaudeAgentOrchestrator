@@ -201,8 +201,33 @@ function onNavigate(id) {
 }
 
 function printPdf() {
+  const article = document.querySelector('.reader-md')
+  if (!article) return
+
+  // Clone the rendered article into a detached top-level container so the
+  // browser paginates its natural height instead of being clipped by the
+  // app's nested overflow: hidden + h-screen containers.
+  const root = document.createElement('div')
+  root.id = 'reader-print-root'
+  root.innerHTML = article.innerHTML
+  document.body.appendChild(root)
   document.body.classList.add('printing-reader')
-  window.print()
-  document.body.classList.remove('printing-reader')
+
+  const cleanup = () => {
+    document.body.classList.remove('printing-reader')
+    root.remove()
+    window.removeEventListener('afterprint', cleanup)
+  }
+  window.addEventListener('afterprint', cleanup)
+
+  // Defer print one tick so styles apply before the dialog opens
+  setTimeout(() => {
+    window.print()
+    // Firefox/Safari don't fire afterprint reliably in all cases — also
+    // schedule a fallback cleanup shortly after the sync print() returns.
+    setTimeout(() => {
+      if (document.body.classList.contains('printing-reader')) cleanup()
+    }, 1000)
+  }, 0)
 }
 </script>

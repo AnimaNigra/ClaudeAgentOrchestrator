@@ -1,8 +1,9 @@
 /* Print layout for the Reader.
-   Activated by adding `printing-reader` to <body> before window.print() (see
-   ReaderView.vue). Uses the visibility trick to hide everything except the
-   rendered Markdown, then positions the preview absolutely so it can flow
-   across pages without being clipped by the app's overflow: hidden containers. */
+   ReaderView.printPdf() clones the rendered article into a detached
+   <div id="reader-print-root"> as a direct child of <body>, then adds
+   `printing-reader` on <body> before window.print(). This avoids fighting
+   the app's nested overflow: hidden + h-screen containers, so content
+   paginates naturally across pages. */
 
 @media print {
   @page {
@@ -18,102 +19,135 @@
     height: auto !important;
   }
 
-  /* Hide the entire app chrome (toolbar, tabs, sidebar, overlays, dialogs, …) */
-  body.printing-reader * {
-    visibility: hidden !important;
+  /* Hide the entire Vue app (the normal UI) while we print the clone. */
+  body.printing-reader #app {
+    display: none !important;
   }
 
-  /* Re-show only the rendered markdown article */
-  body.printing-reader .reader-md,
-  body.printing-reader .reader-md * {
-    visibility: visible !important;
-  }
-
-  /* Detach the article from the scroll container so its full height prints
-     across multiple pages instead of being clipped by overflow: hidden. */
-  body.printing-reader .reader-md {
-    position: absolute;
-    left: 0;
-    top: 0;
+  /* The cloned article container. It replaces the normal layout entirely. */
+  #reader-print-root {
+    display: block;
     width: 100%;
     max-width: 100%;
-    padding: 0;
     margin: 0;
-    color: #000 !important;
-    background: #fff !important;
+    padding: 0;
+    color: #000;
+    background: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
+                 'Helvetica Neue', Arial, sans-serif;
     font-size: 11pt;
+    line-height: 1.55;
   }
 
-  /* Light-theme typography for print */
-  body.printing-reader .reader-md h1,
-  body.printing-reader .reader-md h2,
-  body.printing-reader .reader-md h3,
-  body.printing-reader .reader-md h4,
-  body.printing-reader .reader-md h5,
-  body.printing-reader .reader-md h6,
-  body.printing-reader .reader-md strong,
-  body.printing-reader .reader-md em,
-  body.printing-reader .reader-md p,
-  body.printing-reader .reader-md li,
-  body.printing-reader .reader-md td,
-  body.printing-reader .reader-md th {
-    color: #000 !important;
+  /* Re-apply the reader's light-print typography on the clone. We re-declare
+     here so the clone isn't styled by the main reader.css dark theme. */
+  #reader-print-root h1,
+  #reader-print-root h2,
+  #reader-print-root h3,
+  #reader-print-root h4,
+  #reader-print-root h5,
+  #reader-print-root h6 {
+    color: #000;
+    font-weight: 600;
+    line-height: 1.25;
+    margin-top: 1.4em;
+    margin-bottom: 0.5em;
+    page-break-after: avoid;
   }
-  body.printing-reader .reader-md h1 { border-color: #9ca3af !important; }
-  body.printing-reader .reader-md h2 { border-color: #d1d5db !important; }
+  #reader-print-root h1 { font-size: 1.8em; border-bottom: 1px solid #9ca3af; padding-bottom: 0.2em; margin-top: 0; }
+  #reader-print-root h2 { font-size: 1.4em; border-bottom: 1px solid #d1d5db; padding-bottom: 0.2em; }
+  #reader-print-root h3 { font-size: 1.2em; }
 
-  body.printing-reader .reader-md a {
-    color: #1d4ed8 !important;
-    text-decoration: underline;
+  #reader-print-root p,
+  #reader-print-root li,
+  #reader-print-root td,
+  #reader-print-root th { color: #000; }
+  #reader-print-root strong { color: #000; font-weight: 600; }
+  #reader-print-root em     { color: #000; }
+  #reader-print-root a      { color: #1d4ed8; text-decoration: underline; }
+
+  #reader-print-root code {
+    font-family: 'Consolas', 'SFMono-Regular', ui-monospace, Menlo, Monaco, monospace;
+    font-size: 0.88em;
+    background: #f3f4f6;
+    color: #111827;
+    padding: 0.1em 0.3em;
+    border: 1px solid #e5e7eb;
+    border-radius: 3px;
   }
 
-  body.printing-reader .reader-md code {
-    color: #111827 !important;
-    background: #f3f4f6 !important;
-    border-color: #d1d5db !important;
-  }
-
-  body.printing-reader .reader-md pre {
-    color: #111827 !important;
+  #reader-print-root pre {
+    font-family: 'Consolas', 'SFMono-Regular', ui-monospace, Menlo, Monaco, monospace;
+    font-size: 0.85em;
+    line-height: 1.5;
     background: #f9fafb !important;
-    border: 1px solid #d1d5db !important;
-    page-break-inside: avoid;
-  }
-  body.printing-reader .reader-md pre code {
-    color: inherit !important;
-    background: transparent !important;
-  }
-
-  body.printing-reader .reader-md blockquote {
-    color: #374151 !important;
-    background: #f9fafb !important;
-    border-left-color: #3b82f6 !important;
-  }
-
-  body.printing-reader .reader-md table {
-    display: table;            /* override scrollable display:block from screen CSS */
+    color: #111827 !important;
+    padding: 0.8rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
     overflow: visible;
+    white-space: pre-wrap;
+    word-break: break-word;
+    page-break-inside: avoid;
+    margin: 0.8em 0;
+  }
+  #reader-print-root pre code {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font-size: inherit;
+  }
+
+  #reader-print-root blockquote {
+    color: #374151;
+    background: #f9fafb;
+    border-left: 3px solid #3b82f6;
+    padding: 0.4em 0.8em;
+    margin: 0.8em 0;
+    font-style: italic;
+  }
+
+  #reader-print-root ul,
+  #reader-print-root ol {
+    margin: 0.7em 0;
+    padding-left: 1.6em;
+  }
+  #reader-print-root li { margin: 0.2em 0; }
+
+  #reader-print-root table {
+    display: table;
+    border-collapse: collapse;
     width: auto;
     max-width: 100%;
+    margin: 0.8em 0;
+    font-size: 0.92em;
+    page-break-inside: auto;
   }
-  body.printing-reader .reader-md thead {
-    background: #e5e7eb !important;
-  }
-  body.printing-reader .reader-md tbody tr:nth-child(even) {
-    background: #f9fafb !important;
-  }
-  body.printing-reader .reader-md th,
-  body.printing-reader .reader-md td {
-    border-color: #d1d5db !important;
+  #reader-print-root thead         { background: #e5e7eb; }
+  #reader-print-root thead,
+  #reader-print-root thead tr      { page-break-after: avoid; }
+  #reader-print-root tbody tr      { page-break-inside: avoid; }
+  #reader-print-root tbody tr:nth-child(even) { background: #f9fafb; }
+  #reader-print-root th,
+  #reader-print-root td {
+    border: 1px solid #d1d5db;
+    padding: 0.4em 0.7em;
+    text-align: left;
+    vertical-align: top;
   }
 
-  body.printing-reader .reader-md img,
-  body.printing-reader .reader-md .mermaid {
-    page-break-inside: avoid;
+  #reader-print-root img,
+  #reader-print-root .mermaid {
     max-width: 100%;
+    height: auto;
+    page-break-inside: avoid;
   }
+  #reader-print-root img { border-radius: 3px; }
 
-  body.printing-reader .reader-md hr {
-    border-color: #9ca3af !important;
+  #reader-print-root hr {
+    border: none;
+    border-top: 1px solid #9ca3af;
+    margin: 1.2em 0;
   }
 }
