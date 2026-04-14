@@ -46,4 +46,40 @@ public class ReaderController : ControllerBase
             return StatusCode(500, new { error = ex.Message });
         }
     }
+
+    [HttpGet("raw")]
+    public IActionResult GetRaw([FromQuery] string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return BadRequest(new { error = "Invalid path" });
+
+        string full;
+        try { full = Path.GetFullPath(path); }
+        catch { return BadRequest(new { error = "Invalid path" }); }
+
+        var ext = Path.GetExtension(full);
+        if (!RawExtensions.Contains(ext))
+            return BadRequest(new
+            {
+                error = "Unsupported extension",
+                allowed = RawExtensions.ToArray()
+            });
+
+        if (!System.IO.File.Exists(full))
+            return NotFound(new { error = "File not found", path = full });
+
+        var contentType = ext.ToLowerInvariant() switch
+        {
+            ".png"  => "image/png",
+            ".jpg"  => "image/jpeg",
+            ".jpeg" => "image/jpeg",
+            ".gif"  => "image/gif",
+            ".webp" => "image/webp",
+            ".svg"  => "image/svg+xml",
+            _ => "application/octet-stream"
+        };
+
+        var stream = System.IO.File.OpenRead(full);
+        return File(stream, contentType);
+    }
 }
