@@ -27,6 +27,17 @@ export const useReaderStore = defineStore('reader', () => {
         return existing.id
       }
     }
+    // For lite tabs with an fsaKey, dedupe by fsaKey so repeatedly opening the
+    // same Recent entry doesn't create parallel tabs
+    if (partial.mode === 'lite' && partial.fsaKey) {
+      const existing = tabs.value.find(t => t.mode === 'lite' && t.fsaKey === partial.fsaKey)
+      if (existing) {
+        existing.content = partial.content
+        existing.mtime = partial.mtime ?? existing.mtime
+        activeTabId.value = existing.id
+        return existing.id
+      }
+    }
     const tab = {
       id: uuid(),
       path: partial.path ?? null,
@@ -34,6 +45,7 @@ export const useReaderStore = defineStore('reader', () => {
       content: partial.content ?? '',
       mtime: partial.mtime ?? null,
       mode: partial.mode ?? 'full',
+      fsaKey: partial.fsaKey ?? null,
       headings: [],
       scrollY: 0,
     }
@@ -170,10 +182,22 @@ export const useReaderStore = defineStore('reader', () => {
       if (!ok) return null
     }
     const id = addTab({
-      path: null, content, mtime: null, mode: 'lite', displayName: file.name,
+      path: null,
+      content,
+      mtime: file.lastModified || null,
+      mode: 'lite',
+      displayName: file.name,
+      fsaKey,
     })
     addRecent(null, file.name, 'lite', fsaKey)
     return id
+  }
+
+  function updateLiteTabContent(id, content, mtime) {
+    const tab = tabs.value.find(t => t.id === id)
+    if (!tab) return
+    tab.content = content
+    tab.mtime = mtime
   }
 
   async function handleFileChanged(path, mtime) {
@@ -196,5 +220,6 @@ export const useReaderStore = defineStore('reader', () => {
     setSidebarWidth, setScrollY, updateTabHeadings,
     persist, hydrate,
     openFromPath, openFromFile, handleFileChanged,
+    updateLiteTabContent,
   }
 })

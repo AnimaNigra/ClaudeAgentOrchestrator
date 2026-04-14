@@ -72,6 +72,7 @@ const previewEl = ref(null)
 const litePicker = ref(null)
 let connection = null
 let persistTimer = null
+let litePollTimer = null
 
 onMounted(async () => {
   store.hydrate()
@@ -99,11 +100,37 @@ onMounted(async () => {
   connection.on('FileChanged', (path, mtime) => store.handleFileChanged(path, mtime))
   connection.on('WatchFailed', (path) => console.warn('watch failed', path))
   try { await connection.start() } catch {}
+
+  // Poll lite-mode tabs with FSA handles for on-disk changes (live reload
+  // for drag-drop / Browse opens on Chromium browsers)
+  litePollTimer = setInterval(pollLiteTabs, 2000)
 })
 
 onBeforeUnmount(async () => {
+  clearInterval(litePollTimer)
   try { await connection?.stop() } catch {}
 })
+
+async function pollLiteTabs() {
+  if (!fsa.isSupported()) return
+  for (const tab of store.tabs) {
+    if (tab.mode !== 'lite' || !tab.fsaKey) continue
+    try {
+      const handle = await fsa.getHandle(tab.fsaKey)
+      if (!handle) continue
+      // Must have prior permission — don't prompt during polling
+      const perm = await handle.queryPermission({ mode: 'read' })
+      if (perm !== 'granted') continue
+      const file = await handle.getFile()
+      if (file.lastModified && file.lastModified !== tab.mtime) {
+        const content = await file.text()
+        store.updateLiteTabContent(tab.id, content, file.lastModified)
+      }
+    } catch {
+      // File likely deleted/renamed — skip this tick; next one may recover
+    }
+  }
+}
 
 watch(() => [store.tabs.length, store.activeTabId, store.recentFiles.length, store.sidebarWidth],
   () => schedulePersist())
