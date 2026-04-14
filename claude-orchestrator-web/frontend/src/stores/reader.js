@@ -61,15 +61,26 @@ export const useReaderStore = defineStore('reader', () => {
     if (tabs.value.some(t => t.id === id)) activeTabId.value = id
   }
 
-  function addRecent(path, displayName) {
-    const existingIdx = recentFiles.value.findIndex(r => r.path === path)
+  function recentKey(entry) {
+    return entry.mode === 'full' && entry.path
+      ? `full:${entry.path}`
+      : `lite:${entry.displayName}`
+  }
+
+  function addRecent(path, displayName, mode = 'full') {
+    const entry = { path, displayName, openedAt: Date.now(), mode }
+    const key = recentKey(entry)
+    const existingIdx = recentFiles.value.findIndex(r => recentKey(r) === key)
     if (existingIdx >= 0) recentFiles.value.splice(existingIdx, 1)
-    recentFiles.value.unshift({ path, displayName, openedAt: Date.now() })
+    recentFiles.value.unshift(entry)
     if (recentFiles.value.length > 20) recentFiles.value.length = 20
   }
 
-  function removeRecent(path) {
-    recentFiles.value = recentFiles.value.filter(r => r.path !== path)
+  function removeRecent(keyOrPath) {
+    recentFiles.value = recentFiles.value.filter(r => {
+      // Back-compat: accept either a full path (legacy) or a recentKey
+      return recentKey(r) !== keyOrPath && r.path !== keyOrPath
+    })
   }
 
   function setSidebarWidth(px) {
@@ -153,9 +164,11 @@ export const useReaderStore = defineStore('reader', () => {
       )
       if (!ok) return null
     }
-    return addTab({
+    const id = addTab({
       path: null, content, mtime: null, mode: 'lite', displayName: file.name,
     })
+    addRecent(null, file.name, 'lite')
+    return id
   }
 
   async function handleFileChanged(path, mtime) {

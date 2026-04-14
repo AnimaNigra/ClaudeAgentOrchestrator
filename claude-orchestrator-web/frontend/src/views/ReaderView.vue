@@ -21,7 +21,7 @@
         @resize="w => { store.setSidebarWidth(w); schedulePersist() }"
         @navigate="onNavigate"
         @open-recent="openRecent"
-        @remove-recent="store.removeRecent"
+        @remove-recent="onRemoveRecent"
       />
 
       <div class="relative flex-1 flex flex-col overflow-hidden">
@@ -42,6 +42,14 @@
       @submit="onSubmitPath"
       @submit-file="onSubmitFile"
     />
+    <!-- Hidden file input for re-opening lite-mode recent files -->
+    <input
+      ref="litePicker"
+      type="file"
+      class="hidden"
+      accept=".md,.markdown,.mdx,.txt"
+      @change="onLitePickerChange"
+    />
   </div>
 </template>
 
@@ -60,6 +68,7 @@ const store = useReaderStore()
 const dialogOpen = ref(false)
 const activeHeadingId = ref(null)
 const previewEl = ref(null)
+const litePicker = ref(null)
 let connection = null
 let persistTimer = null
 
@@ -111,9 +120,30 @@ async function onSubmitFile(file) {
   catch (e) { alert(`Open failed: ${e.message}`) }
 }
 
-async function openRecent(path) {
-  try { await store.openFromPath(path) }
-  catch { store.removeRecent(path) }
+async function openRecent(entry) {
+  // Back-compat: string argument (legacy full-mode path)
+  if (typeof entry === 'string') entry = { path: entry, mode: 'full' }
+  if (entry.mode === 'lite' || !entry.path) {
+    // Lite mode has no stored content — re-pick the file via the hidden input
+    litePicker.value?.click()
+    return
+  }
+  try { await store.openFromPath(entry.path) }
+  catch { store.removeRecent(entry.path) }
+}
+
+function onRemoveRecent(entry) {
+  if (typeof entry === 'string') { store.removeRecent(entry); return }
+  const key = entry.mode === 'lite' ? `lite:${entry.displayName}` : `full:${entry.path}`
+  store.removeRecent(key)
+}
+
+async function onLitePickerChange(e) {
+  const file = e.target.files?.[0]
+  e.target.value = ''
+  if (!file) return
+  try { await store.openFromFile(file) }
+  catch (err) { alert(`Open failed: ${err.message}`) }
 }
 
 function onNavigate(id) {

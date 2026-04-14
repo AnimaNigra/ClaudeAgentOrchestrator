@@ -13,16 +13,16 @@ describe('ReaderRecent', () => {
     expect(w.findAll('[data-testid="recent-item"]').length).toBe(2)
   })
 
-  it('emits open with path on click', async () => {
+  it('emits open with the entry on click', async () => {
     const w = mount(ReaderRecent, { props: { items } })
     await w.findAll('[data-testid="recent-item"]')[1].trigger('click')
-    expect(w.emitted('open')?.[0]?.[0]).toBe('/b.md')
+    expect(w.emitted('open')?.[0]?.[0]).toEqual(items[1])
   })
 
-  it('emits remove with path on × click', async () => {
+  it('emits remove with the entry on × click', async () => {
     const w = mount(ReaderRecent, { props: { items } })
     await w.findAll('[data-testid="recent-remove"]')[0].trigger('click')
-    expect(w.emitted('remove')?.[0]?.[0]).toBe('/a.md')
+    expect(w.emitted('remove')?.[0]?.[0]).toEqual(items[0])
   })
 
   it('collapses and expands when header clicked', async () => {
