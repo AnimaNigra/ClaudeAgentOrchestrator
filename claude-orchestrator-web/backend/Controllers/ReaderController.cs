@@ -79,7 +79,14 @@ public class ReaderController : ControllerBase
             _ => "application/octet-stream"
         };
 
-        var stream = System.IO.File.OpenRead(full);
-        return File(stream, contentType);
+        try
+        {
+            var stream = System.IO.File.OpenRead(full);
+            return File(stream, contentType);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 }
