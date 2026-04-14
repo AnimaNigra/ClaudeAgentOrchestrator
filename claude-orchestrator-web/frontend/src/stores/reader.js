@@ -3,6 +3,8 @@ import { ref, computed } from 'vue'
 import { v4 as uuid } from 'uuid'
 import * as readerApi from '../services/readerApi.js'
 
+const LARGE_THRESHOLD = 5 * 1024 * 1024
+
 export const useReaderStore = defineStore('reader', () => {
   const tabs = ref([])
   const activeTabId = ref(null)
@@ -121,6 +123,12 @@ export const useReaderStore = defineStore('reader', () => {
 
   async function openFromPath(path) {
     const { path: abs, content, mtime } = await readerApi.getContent(path)
+    if (content.length > LARGE_THRESHOLD) {
+      const ok = globalThis.confirm(
+        `File is large (${(content.length / 1024 / 1024).toFixed(1)} MB). Render anyway?`
+      )
+      if (!ok) return null
+    }
     const displayName = abs.split(/[\\/]/).pop()
     const id = addTab({ path: abs, content, mtime, mode: 'full', displayName })
     try { await readerApi.watch(abs) } catch {}
@@ -139,12 +147,14 @@ export const useReaderStore = defineStore('reader', () => {
 
   async function openFromFile(file) {
     const content = await readFile(file)
+    if (content.length > LARGE_THRESHOLD) {
+      const ok = globalThis.confirm(
+        `File is large (${(content.length / 1024 / 1024).toFixed(1)} MB). Render anyway?`
+      )
+      if (!ok) return null
+    }
     return addTab({
-      path: null,
-      content,
-      mtime: null,
-      mode: 'lite',
-      displayName: file.name,
+      path: null, content, mtime: null, mode: 'lite', displayName: file.name,
     })
   }
 

@@ -269,3 +269,33 @@ describe('reader store — async actions', () => {
     expect(readerApi.unwatch).toHaveBeenCalledWith('/a.md')
   })
 })
+
+describe('reader store — large file / extension guards', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('asks for confirm when content > 5 MB; aborts on decline', async () => {
+    const bigContent = 'x'.repeat(6 * 1024 * 1024)
+    readerApi.getContent.mockResolvedValue({ path: '/a.md', content: bigContent, mtime: 1 })
+    const s = useReaderStore()
+    const origConfirm = globalThis.confirm
+    globalThis.confirm = vi.fn(() => false)
+    const id = await s.openFromPath('/a.md')
+    expect(id).toBeNull()
+    expect(s.tabs.length).toBe(0)
+    globalThis.confirm = origConfirm
+  })
+
+  it('continues when user accepts the large-file prompt', async () => {
+    const bigContent = 'x'.repeat(6 * 1024 * 1024)
+    readerApi.getContent.mockResolvedValue({ path: '/a.md', content: bigContent, mtime: 1 })
+    readerApi.watch.mockResolvedValue()
+    const s = useReaderStore()
+    globalThis.confirm = vi.fn(() => true)
+    const id = await s.openFromPath('/a.md')
+    expect(id).toBeTruthy()
+    expect(s.tabs.length).toBe(1)
+  })
+})
