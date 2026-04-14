@@ -1,0 +1,40 @@
+@media print {
+  /* Hide app chrome */
+  header,
+  nav,
+  aside,
+  [data-testid="reader-tab"],
+  [data-testid="reader-tab-new"],
+  .reader-preview [data-testid="drop-overlay"],
+  .fixed { /* dialogs/overlays */
+    display: none !important;
+  }
+
+  /* Expand the preview to the full page */
+  .reader-preview {
+    overflow: visible !important;
+    height: auto !important;
+    padding: 0 !important;
+  }
+
+  .reader-md {
+    color: #000 !important;
+    background: #fff !important;
+    font-size: 11pt;
+  }
+
+  .reader-md :deep(pre), .reader-md pre {
+    page-break-inside: avoid;
+    border: 1px solid #ccc;
+    background: #f7f7f7 !important;
+    color: #000 !important;
+  }
+
+  .reader-md :deep(img), .reader-md img,
+  .reader-md :deep(.mermaid), .reader-md .mermaid {
+    page-break-inside: avoid;
+    max-width: 100%;
+  }
+
+  body { background: #fff !important; }
+}
