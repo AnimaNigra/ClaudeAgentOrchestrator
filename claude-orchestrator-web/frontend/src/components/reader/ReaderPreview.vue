@@ -14,7 +14,7 @@
     <article
       v-else
       ref="article"
-      class="reader-md prose prose-invert max-w-none"
+      class="reader-md"
       v-html="html"
     />
   </div>
@@ -97,19 +97,3 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
-.reader-md :deep(pre.hljs) {
-  padding: 1rem;
-  border-radius: 6px;
-  overflow-x: auto;
-}
-.reader-md :deep(img) { max-width: 100%; }
-.reader-md :deep(.mermaid-error) {
-  padding: 0.75rem;
-  border-radius: 6px;
-  border: 1px solid rgba(239,68,68,0.5);
-  color: rgb(248, 113, 113);
-  font-family: monospace;
-  white-space: pre-wrap;
-}
-</style>

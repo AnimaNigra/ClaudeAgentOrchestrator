@@ -1,0 +1,178 @@
+/* Reader-specific typography. Overrides the terminal-focused monospace body font
+   (set in main.css) and provides explicit, dark-theme-friendly styles for rendered
+   Markdown. Applied via the `.reader-md` class on <article> in ReaderPreview.vue. */
+
+.reader-md {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue',
+               Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+  color: #e2e8f0;
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+/* Headings */
+.reader-md h1,
+.reader-md h2,
+.reader-md h3,
+.reader-md h4,
+.reader-md h5,
+.reader-md h6 {
+  color: #f8fafc;
+  font-weight: 600;
+  line-height: 1.25;
+  margin-top: 1.6em;
+  margin-bottom: 0.6em;
+  scroll-margin-top: 1rem;
+}
+.reader-md h1 { font-size: 2em;    border-bottom: 1px solid #334155; padding-bottom: 0.3em; margin-top: 0.5em; }
+.reader-md h2 { font-size: 1.5em;  border-bottom: 1px solid #1e293b; padding-bottom: 0.25em; }
+.reader-md h3 { font-size: 1.25em; }
+.reader-md h4 { font-size: 1.05em; }
+.reader-md h5 { font-size: 0.95em; color: #cbd5e1; }
+.reader-md h6 { font-size: 0.85em; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* Paragraphs & inline */
+.reader-md p          { margin: 0.85em 0; }
+.reader-md strong     { color: #f1f5f9; font-weight: 600; }
+.reader-md em         { color: #e2e8f0; }
+.reader-md a          { color: #60a5fa; text-decoration: underline; text-underline-offset: 2px; }
+.reader-md a:hover    { color: #93c5fd; }
+
+/* Inline code */
+.reader-md code {
+  font-family: 'Consolas', 'SFMono-Regular', ui-monospace, Menlo, Monaco, monospace;
+  font-size: 0.88em;
+  background: #1e293b;
+  color: #fca5a5;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  border: 1px solid #334155;
+}
+
+/* Code blocks (overrides hljs theme padding already in ReaderPreview.vue scoped style) */
+.reader-md pre {
+  font-family: 'Consolas', 'SFMono-Regular', ui-monospace, Menlo, Monaco, monospace;
+  font-size: 0.88em;
+  line-height: 1.55;
+  background: #0b1220 !important;
+  color: #e2e8f0;
+  padding: 1rem 1.1rem;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+.reader-md pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+}
+
+/* Lists */
+.reader-md ul,
+.reader-md ol {
+  margin: 0.85em 0;
+  padding-left: 1.75em;
+}
+.reader-md li        { margin: 0.3em 0; }
+.reader-md li > p    { margin: 0.25em 0; }
+.reader-md ul        { list-style: disc; }
+.reader-md ol        { list-style: decimal; }
+.reader-md ul ul, .reader-md ul ol,
+.reader-md ol ul, .reader-md ol ol { margin: 0.25em 0; }
+
+/* Blockquotes */
+.reader-md blockquote {
+  margin: 1em 0;
+  padding: 0.5em 1em;
+  border-left: 4px solid #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+  color: #cbd5e1;
+  font-style: italic;
+}
+
+/* Tables */
+.reader-md table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  width: auto;
+  max-width: 100%;
+  display: block;
+  overflow-x: auto;
+  font-size: 0.92em;
+}
+.reader-md thead {
+  background: #1e293b;
+}
+.reader-md th,
+.reader-md td {
+  border: 1px solid #334155;
+  padding: 0.5em 0.85em;
+  text-align: left;
+  vertical-align: top;
+}
+.reader-md th {
+  font-weight: 600;
+  color: #f1f5f9;
+}
+.reader-md tbody tr:nth-child(even) {
+  background: rgba(30, 41, 59, 0.35);
+}
+
+/* Horizontal rule */
+.reader-md hr {
+  border: none;
+  border-top: 1px solid #334155;
+  margin: 2em 0;
+}
+
+/* Images */
+.reader-md img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin: 0.5em 0;
+}
+.reader-md img[data-placeholder="lite-mode"] {
+  display: inline-block;
+  min-width: 120px;
+  min-height: 24px;
+  background: repeating-linear-gradient(
+    45deg,
+    #1e293b,
+    #1e293b 6px,
+    #0f172a 6px,
+    #0f172a 12px
+  );
+  border: 1px dashed #475569;
+}
+
+/* Mermaid diagrams */
+.reader-md .mermaid {
+  margin: 1.2em 0;
+  text-align: center;
+}
+.reader-md .mermaid svg { max-width: 100%; height: auto; }
+.reader-md .mermaid-error {
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.08);
+  color: rgb(248, 113, 113);
+  font-family: 'Consolas', monospace;
+  white-space: pre-wrap;
+}
+
+/* Task list (markdown-it default) */
+.reader-md input[type="checkbox"] {
+  margin-right: 0.4em;
+  vertical-align: middle;
+}
+
+/* First/last element margin trim */
+.reader-md > :first-child { margin-top: 0; }
+.reader-md > :last-child  { margin-bottom: 0; }
