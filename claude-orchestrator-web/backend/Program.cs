@@ -44,6 +44,7 @@ builder.Services.AddSingleton<AgentHistoryService>();
 builder.Services.AddSingleton<PriorityService>();
 builder.Services.AddSingleton<GitReviewService>();
 builder.Services.AddSingleton<WorktreeService>();
+builder.Services.AddSingleton<FileWatcherService>();
 
 builder.Services.AddSingleton<AgentManager>(sp =>
 {

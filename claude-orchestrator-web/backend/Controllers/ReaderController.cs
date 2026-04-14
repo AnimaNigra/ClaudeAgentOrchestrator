@@ -1,11 +1,21 @@
 using Microsoft.AspNetCore.Mvc;
+using ClaudeOrchestrator.Services;
 
 namespace ClaudeOrchestrator.Controllers;
+
+public record WatchRequest(string Path);
 
 [ApiController]
 [Route("api/[controller]")]
 public class ReaderController : ControllerBase
 {
+    private readonly FileWatcherService _watcher;
+
+    public ReaderController(FileWatcherService watcher)
+    {
+        _watcher = watcher;
+    }
+
     private static readonly HashSet<string> ContentExtensions =
         new(StringComparer.OrdinalIgnoreCase) { ".md", ".markdown", ".mdx", ".txt" };
 
@@ -88,5 +98,33 @@ public class ReaderController : ControllerBase
         {
             return StatusCode(500, new { error = ex.Message });
         }
+    }
+
+    [HttpPost("watch")]
+    public IActionResult Watch([FromBody] WatchRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.Path))
+            return BadRequest(new { error = "Invalid path" });
+
+        string full;
+        try { full = Path.GetFullPath(req.Path); }
+        catch { return BadRequest(new { error = "Invalid path" }); }
+
+        if (!System.IO.File.Exists(full))
+            return NotFound(new { error = "File not found", path = full });
+
+        _watcher.Watch(full);
+        return Ok();
+    }
+
+    [HttpPost("unwatch")]
+    public IActionResult Unwatch([FromBody] WatchRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.Path)) return Ok();
+        string full;
+        try { full = Path.GetFullPath(req.Path); }
+        catch { return Ok(); }
+        _watcher.Unwatch(full);
+        return Ok();
     }
 }
