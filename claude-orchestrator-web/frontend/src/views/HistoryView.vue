@@ -32,6 +32,13 @@
           <div class="flex items-center gap-3 flex-shrink-0">
             <span class="text-xs text-gray-500">&times;{{ group.sessions.length }}</span>
             <span v-if="group.resumableCount > 0" class="text-xs text-green-400 bg-green-400/10 px-1.5 py-0.5 rounded">{{ group.resumableCount }} resumable</span>
+            <button
+              @click="startFresh(group, $event)"
+              class="text-xs px-2 py-0.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition-colors"
+              title="Start a fresh agent for this project (no session resume)"
+            >
+              New
+            </button>
             <span class="text-xs text-gray-600">{{ formatDate(group.lastFinished) }}</span>
           </div>
         </button>
