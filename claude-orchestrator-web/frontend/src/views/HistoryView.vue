@@ -144,6 +144,13 @@ async function resume(record) {
   router.push('/')
 }
 
+async function startFresh(group, event) {
+  event.stopPropagation()
+  const agent = await store.spawnAgent(group.name, group.cwd, null)
+  store.activeAgentId = agent.id
+  router.push('/')
+}
+
 async function deleteRecord(id, groupKey) {
   await fetch(`/api/history/${id}`, { method: 'DELETE' })
   records.value = records.value.filter(r => r.id !== id)
