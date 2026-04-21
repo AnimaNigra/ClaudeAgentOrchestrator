@@ -114,7 +114,7 @@ public class PtySession : IAsyncDisposable
         psi.ArgumentList.Add(ProxyScript);
 
         // Pass target command via env so the proxy can spawn it in the PTY.
-        // On Windows claudeCmd is "node" — use the full path so node-pty can find it.
+        // When using Node.js entry point, resolve full path so node-pty can find it.
         psi.EnvironmentVariables["PTY_CMD"]  = claudeCmd == "node" ? nodePath : claudeCmd;
         psi.EnvironmentVariables["PTY_ARGS"] = JsonSerializer.Serialize(claudeArgs);
         psi.EnvironmentVariables["PTY_CWD"]  = _agent.Cwd ?? Directory.GetCurrentDirectory();
@@ -492,7 +492,15 @@ public class PtySession : IAsyncDisposable
         {
             var npmRoot = await RunCaptureAsync("cmd", "/c npm root -g");
             npmRoot = npmRoot.Trim();
-            var cliJs = Path.Combine(npmRoot, "@anthropic-ai", "claude-code", "cli.js");
+            var packageDir = Path.Combine(npmRoot, "@anthropic-ai", "claude-code");
+
+            // Claude Code 2.x ships a native binary
+            var nativeExe = Path.Combine(packageDir, "bin", "claude.exe");
+            if (File.Exists(nativeExe))
+                return (nativeExe, []);
+
+            // Older versions used a Node.js entry point
+            var cliJs = Path.Combine(packageDir, "cli.js");
             if (File.Exists(cliJs))
                 return ("node", [cliJs]);
         }

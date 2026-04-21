@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backend (Debug)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/claude-orchestrator-web/backend/bin/Debug/net9.0/ClaudeOrchestrator.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/claude-orchestrator-web/backend",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "console": "integratedTerminal"
+    }
+  ]
+}
