@@ -10,6 +10,7 @@ export const useReaderStore = defineStore('reader', () => {
   const activeTabId = ref(null)
   const recentFiles = ref([])
   const sidebarWidth = ref(260)
+  let hydrated = false
 
   const activeTab = computed(() =>
     tabs.value.find(t => t.id === activeTabId.value) || null
@@ -129,9 +130,14 @@ export const useReaderStore = defineStore('reader', () => {
   }
 
   function hydrate() {
+    // The store is a singleton; ReaderView may mount/unmount multiple times
+    // per session (router tab switching). Only pull from localStorage on the
+    // first hydrate, otherwise in-memory lite tabs and fresh content get wiped.
+    if (hydrated) return false
+    hydrated = true
     let raw
     try { raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') } catch { raw = null }
-    if (!raw || typeof raw !== 'object') return
+    if (!raw || typeof raw !== 'object') return true
     if (Array.isArray(raw.tabs)) {
       tabs.value = raw.tabs.map(t => ({
         id: t.id,
@@ -147,6 +153,7 @@ export const useReaderStore = defineStore('reader', () => {
     if (typeof raw.activeTabId === 'string') activeTabId.value = raw.activeTabId
     if (Array.isArray(raw.recentFiles)) recentFiles.value = raw.recentFiles
     if (typeof raw.sidebarWidth === 'number') sidebarWidth.value = raw.sidebarWidth
+    return true
   }
 
   async function openFromPath(path) {

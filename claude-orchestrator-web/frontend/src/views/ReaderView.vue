@@ -75,26 +75,38 @@ let persistTimer = null
 let litePollTimer = null
 
 onMounted(async () => {
-  store.hydrate()
-  // Re-fetch content for any persisted full-mode tabs.
-  // If a file is gone from disk, drop the tab (and its recent entry) so the
-  // user doesn't see a blank, unloadable tab.
-  const missing = []
-  for (const t of [...store.tabs]) {
-    if (t.mode === 'full' && t.path) {
-      try { await store.openFromPath(t.path) }
-      catch {
-        missing.push(t.path)
-        store.closeTab(t.id)
-        store.removeRecent(`full:${t.path}`)
+  // hydrate() returns true only on the first call; on later remounts (router
+  // tab switching) the singleton store already holds tabs/content in memory,
+  // so we must skip the refetch loop — re-running it would clobber scrollY,
+  // hijack activeTabId, and drop lite-mode tabs that aren't in localStorage.
+  const firstHydrate = store.hydrate()
+  if (firstHydrate) {
+    // Re-fetch content for any persisted full-mode tabs.
+    // If a file is gone from disk, drop the tab (and its recent entry) so the
+    // user doesn't see a blank, unloadable tab.
+    const restoredActiveId = store.activeTabId
+    const missing = []
+    for (const t of [...store.tabs]) {
+      if (t.mode === 'full' && t.path) {
+        try { await store.openFromPath(t.path) }
+        catch {
+          missing.push(t.path)
+          store.closeTab(t.id)
+          store.removeRecent(`full:${t.path}`)
+        }
       }
     }
-  }
-  if (missing.length) {
-    alert(
-      `${missing.length === 1 ? 'Previously opened file is' : 'Previously opened files are'} no longer available:\n\n` +
-      missing.map(p => '• ' + p).join('\n')
-    )
+    // openFromPath sets activeTabId to whatever it loaded last; restore the
+    // persisted choice so the user lands on the tab they had open.
+    if (restoredActiveId && store.tabs.some(t => t.id === restoredActiveId)) {
+      store.activateTab(restoredActiveId)
+    }
+    if (missing.length) {
+      alert(
+        `${missing.length === 1 ? 'Previously opened file is' : 'Previously opened files are'} no longer available:\n\n` +
+        missing.map(p => '• ' + p).join('\n')
+      )
+    }
   }
   connection = new signalR.HubConnectionBuilder().withUrl('/hubs/reader').withAutomaticReconnect().build()
   connection.on('FileChanged', (path, mtime) => store.handleFileChanged(path, mtime))
