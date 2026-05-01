@@ -13,17 +13,31 @@ export const useAgentsStore = defineStore('agents', () => {
 
   // Non-reactive PTY data callbacks (agentId → fn(base64chunk))
   const _ptyHandlers = {}
-  // Buffer chunks that arrive before the terminal registers its handler
-  const _ptyQueues = {}
+  // Persistent rolling buffer of base64 chunks per agent. Replayed on every
+  // (re)registration so the terminal scrollback survives view switches that
+  // unmount AgentsView (e.g. visiting /reader and coming back).
+  const _ptyBuffers = {}
+  const PTY_BUFFER_MAX_CHARS = 2_000_000  // ~1.5 MB of raw PTY bytes
+
+  function _pushBuffer(agentId, chunk) {
+    let buf = _ptyBuffers[agentId]
+    if (!buf) { buf = { chunks: [], chars: 0 }; _ptyBuffers[agentId] = buf }
+    buf.chunks.push(chunk)
+    buf.chars += chunk.length
+    while (buf.chars > PTY_BUFFER_MAX_CHARS && buf.chunks.length > 1) {
+      buf.chars -= buf.chunks.shift().length
+    }
+  }
 
   function registerPtyHandler(agentId, fn) {
     _ptyHandlers[agentId] = fn
-    // Replay any chunks that arrived before the terminal was ready
-    const queued = _ptyQueues[agentId]
-    if (queued?.length) {
-      queued.forEach(chunk => fn(chunk))
-      delete _ptyQueues[agentId]
-    }
+    // Replay everything we have so the new terminal regains its history
+    const buf = _ptyBuffers[agentId]
+    if (buf?.chunks.length) buf.chunks.forEach(chunk => fn(chunk))
+  }
+
+  function unregisterPtyHandler(agentId) {
+    delete _ptyHandlers[agentId]
   }
 
   // ── Notifications ────────────────────────────────────
@@ -102,14 +116,9 @@ export const useAgentsStore = defineStore('agents', () => {
       if (eventType === 'agent_spawned') {
         if (!activeAgentId.value) activeAgentId.value = agentId
       } else if (eventType === 'pty_data') {
-        if (_ptyHandlers[agentId]) {
-          _ptyHandlers[agentId](data.chunk)
-        } else {
-          // Terminal not mounted yet — buffer until registerPtyHandler is called
-          if (!_ptyQueues[agentId]) _ptyQueues[agentId] = []
-          _ptyQueues[agentId].push(data.chunk)
-          if (_ptyQueues[agentId].length > 2000) _ptyQueues[agentId].shift()
-        }
+        // Always buffer so re-mounts can replay history; deliver live if a handler is attached.
+        _pushBuffer(agentId, data.chunk)
+        _ptyHandlers[agentId]?.(data.chunk)
       } else if (eventType === 'agent_status_changed') {
         if (data?.status === 'idle' && !_notifiedIdle.has(agentId)) {
           _notifiedIdle.add(agentId)
@@ -144,6 +153,8 @@ export const useAgentsStore = defineStore('agents', () => {
         // Remove from list after a brief pause so user sees the Done state
         setTimeout(() => {
           delete agents.value[agentId]
+          delete _ptyBuffers[agentId]
+          delete _ptyHandlers[agentId]
           if (activeAgentId.value === agentId)
             activeAgentId.value = Object.keys(agents.value)[0] ?? null
         }, 2000)
@@ -214,6 +225,6 @@ export const useAgentsStore = defineStore('agents', () => {
     agents, activeAgentId, connected, pendingPermissions, alwaysAllowedTools,
     agentList,
     connect, spawnAgent, createWorktree, sendKeystroke, resizePty, killAgent,
-    registerPtyHandler, addAlwaysAllowed,
+    registerPtyHandler, unregisterPtyHandler, addAlwaysAllowed,
   }
 })
