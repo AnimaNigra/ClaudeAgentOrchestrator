@@ -12,6 +12,7 @@
       No agent selected — type <code class="mx-1 text-blue-400">create &lt;name&gt;</code> to create one
     </div>
 
+
     <!-- Speak selection button: always visible while an agent is active.
          Dimmed when there's no selection so the user knows where to click. -->
     <button
@@ -38,7 +39,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -57,14 +58,24 @@ const terminals = {}
 // This prevents unnecessary PTY redraws (which falsely trigger the "Running" state) on agent switch
 const lastSentDims = {}
 
-// Speak-selection state
-const hasSelection = ref(false)
+// Speak-selection state.
+// We cache the last non-empty selection rather than reading the live xterm
+// selection at click time: an active agent writes to the terminal frequently
+// (high-frequency pty_data), and every terminal.write() CLEARS the current
+// xterm selection. Reading it on click would then return '' right after the
+// user selected something. Caching the latest non-empty selection keeps the
+// speak button usable on a terminal that is still producing output.
+const selectedText = ref('')
+const hasSelection = computed(() => !!selectedText.value.trim())
 const isSpeaking = ref(false)
 
+// On agent switch, reset the cached selection to the newly active terminal's
+// own selection (normally empty) so a stale selection from another agent
+// doesn't carry over.
 function refreshSelectionState() {
   const id = activeAgentId.value
   const t = id ? terminals[id] : null
-  hasSelection.value = !!t?.terminal.hasSelection()
+  selectedText.value = t?.terminal.getSelection() || ''
 }
 
 function toggleSpeak() {
@@ -73,10 +84,7 @@ function toggleSpeak() {
     isSpeaking.value = false
     return
   }
-  const id = activeAgentId.value
-  const t = id ? terminals[id] : null
-  if (!t) return
-  const text = t.terminal.getSelection().trim()
+  const text = selectedText.value.trim()
   if (!text) return
 
   const utter = new SpeechSynthesisUtterance(text)
@@ -88,6 +96,11 @@ function toggleSpeak() {
   if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
     window.speechSynthesis.cancel()
   }
+  // Chrome can leave the engine stuck in a "paused" state after a prior
+  // cancel() (incl. one from the Reader tab — speechSynthesis is a global
+  // singleton), making speak() silently do nothing. resume() clears it and is
+  // a harmless no-op when not paused.
+  window.speechSynthesis.resume()
   isSpeaking.value = true
   window.speechSynthesis.speak(utter)
 }
@@ -166,11 +179,13 @@ function mountTerminal(agentId, el) {
     store.sendKeystroke(agentId, data)
   })
 
-  // Track selection state so the speak button can show/hide
+  // Cache the selection so the speak button works even after terminal output
+  // clears the live xterm selection. Only capture non-empty selections; an
+  // empty change (e.g. output wrote and wiped the highlight) keeps the last one.
   terminal.onSelectionChange(() => {
-    if (agentId === activeAgentId.value) {
-      hasSelection.value = terminal.hasSelection()
-    }
+    if (agentId !== activeAgentId.value) return
+    const sel = terminal.getSelection()
+    if (sel.trim()) selectedText.value = sel
   })
 
   terminals[agentId] = { terminal, fitAddon }
