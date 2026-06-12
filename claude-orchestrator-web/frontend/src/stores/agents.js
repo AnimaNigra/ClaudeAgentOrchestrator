@@ -4,6 +4,7 @@ import * as signalR from '@microsoft/signalr'
 
 export const useAgentsStore = defineStore('agents', () => {
   const agents = ref({})        // id → agent object
+  const agentOrder = ref([])    // session-only custom sidebar order (list of ids)
   const activeAgentId = ref(null)
   const connected = ref(false)
   const pendingPermissions = ref([])  // queue of { requestId, agentId, toolName, toolInput }
@@ -219,12 +220,27 @@ export const useAgentsStore = defineStore('agents', () => {
     return res.json()
   }
 
-  const agentList = computed(() => Object.values(agents.value))
+  // Sidebar order: honor the user's custom order (agentOrder), drop agents that
+  // no longer exist, and append any agents missing from it (e.g. freshly
+  // spawned) at the end. Self-healing, so the SignalR handlers don't need to
+  // maintain agentOrder themselves.
+  const agentList = computed(() => {
+    const present = agents.value
+    const ordered = agentOrder.value.map(id => present[id]).filter(Boolean)
+    const seen = new Set(agentOrder.value)
+    const extras = Object.values(present).filter(a => !seen.has(a.id))
+    return [...ordered, ...extras]
+  })
+
+  // Set a new explicit sidebar order (list of agent ids). Session-only.
+  function reorderAgents(orderedIds) {
+    agentOrder.value = orderedIds
+  }
 
   return {
     agents, activeAgentId, connected, pendingPermissions, alwaysAllowedTools,
     agentList,
     connect, spawnAgent, createWorktree, sendKeystroke, resizePty, killAgent,
-    registerPtyHandler, unregisterPtyHandler, addAlwaysAllowed,
+    registerPtyHandler, unregisterPtyHandler, addAlwaysAllowed, reorderAgents,
   }
 })

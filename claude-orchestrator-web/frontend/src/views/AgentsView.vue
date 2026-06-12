@@ -8,6 +8,12 @@
         :key="agent.id"
         :agent="agent"
         :is-active="store.activeAgentId === agent.id"
+        draggable="true"
+        :class="{ 'opacity-40': dragAgentId === agent.id }"
+        @dragstart="onDragStart(agent)"
+        @dragend="dragAgentId = null"
+        @dragover.prevent
+        @drop="onDrop(agent)"
         @select="store.activeAgentId = $event"
         @review="toggleReview($event)"
         @create-worktree="handleCreateWorktree($event)"
@@ -84,6 +90,29 @@ const cmdBar = ref(null)
 const showVoiceDialog = ref(false)
 const reviewAgentId = ref(null)
 const sidebarWidth = ref(Number(localStorage.getItem('sidebarWidth')) || 256)
+
+// Drag-and-drop reordering of the agent sidebar (session-only; mirrors PrioritiesView)
+const dragAgentId = ref(null)
+let dragAgent = null
+
+function onDragStart(agent) {
+  dragAgent = agent
+  dragAgentId.value = agent.id
+}
+
+function onDrop(targetAgent) {
+  dragAgentId.value = null
+  if (!dragAgent || dragAgent.id === targetAgent.id) return
+  const ids = store.agentList.map(a => a.id)
+  const oldIndex = ids.indexOf(dragAgent.id)
+  const targetIndex = ids.indexOf(targetAgent.id)
+  if (oldIndex < 0 || targetIndex < 0) return
+  // Insert-based reorder: remove dragged id, re-insert at the target position.
+  const [moved] = ids.splice(oldIndex, 1)
+  ids.splice(targetIndex, 0, moved)
+  store.reorderAgents(ids)
+  dragAgent = null
+}
 
 function toggleReview(agentId) {
   reviewAgentId.value = reviewAgentId.value === agentId ? null : agentId

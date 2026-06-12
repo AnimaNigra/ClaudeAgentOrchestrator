@@ -7,6 +7,7 @@
     <!-- Row 1: Name + model badge + status -->
     <div class="flex items-center justify-between mb-1">
       <div class="flex items-center gap-1.5 min-w-0">
+        <span class="text-gray-600 cursor-grab select-none leading-none flex-shrink-0" title="Drag to reorder">⠿</span>
         <span class="font-bold text-sm truncate">{{ agent.name }}</span>
         <span v-if="agent.modelName" class="text-[10px] text-purple-300 bg-purple-400/10 px-1.5 py-0.5 rounded flex-shrink-0">{{ agent.modelName }}</span>
         <span v-if="agent.worktreeBranch" class="text-[10px] text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded flex-shrink-0" title="Running in worktree">🌿 {{ agent.worktreeBranch }}</span>
