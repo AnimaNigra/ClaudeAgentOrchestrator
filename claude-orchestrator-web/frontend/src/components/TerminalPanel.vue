@@ -19,7 +19,7 @@
       v-if="activeAgentId"
       @click="toggleSpeak"
       :disabled="!hasSelection && !isSpeaking"
-      :title="isSpeaking ? 'Stop reading' : (hasSelection ? 'Read selection aloud' : 'Select text in the terminal first (drag with mouse, hold Alt if it doesn\'t work), then click here')"
+      :title="isSpeaking ? 'Stop reading' : (hasSelection ? 'Read selection aloud' : 'Hold Shift and drag to select text in the terminal (Claude grabs the mouse otherwise), then click to read it aloud')"
       :aria-label="isSpeaking ? 'Stop reading' : 'Read selection aloud'"
       class="absolute bottom-4 right-20 z-10 w-12 h-12 rounded-full border transition-colors flex items-center justify-center shadow-lg"
       :class="isSpeaking
