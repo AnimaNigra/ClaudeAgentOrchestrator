@@ -12,6 +12,47 @@
       No agent selected — type <code class="mx-1 text-blue-400">create &lt;name&gt;</code> to create one
     </div>
 
+    <!-- Search overlay (Ctrl+F): Enter = next, Shift+Enter = previous, Esc = close -->
+    <div
+      v-if="activeAgentId && searchOpen"
+      class="absolute top-3 right-3 z-20 flex items-center gap-1 bg-gray-900/95 border border-gray-700 rounded-md shadow-lg px-2 py-1"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
+      </svg>
+      <input
+        ref="searchInputRef"
+        v-model="searchTerm"
+        type="text"
+        placeholder="Find in terminal…"
+        spellcheck="false"
+        class="bg-transparent text-sm text-gray-200 placeholder-gray-600 outline-none w-44"
+        @keydown.enter.prevent="runSearch(!$event.shiftKey)"
+        @keydown.esc.prevent="closeSearch"
+      />
+      <button
+        @click="runSearch(false)"
+        title="Previous match (Shift+Enter)"
+        class="p-1 rounded text-gray-400 hover:text-gray-100 hover:bg-gray-700"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 15-6-6-6 6" /></svg>
+      </button>
+      <button
+        @click="runSearch(true)"
+        title="Next match (Enter)"
+        class="p-1 rounded text-gray-400 hover:text-gray-100 hover:bg-gray-700"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6" /></svg>
+      </button>
+      <button
+        @click="closeSearch"
+        title="Close (Esc)"
+        class="p-1 rounded text-gray-400 hover:text-gray-100 hover:bg-gray-700"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
+      </button>
+    </div>
+
 
     <!-- Speak selection button: always visible while an agent is active.
          Dimmed when there's no selection so the user knows where to click. -->
@@ -39,10 +80,14 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { WebglAddon } from '@xterm/addon-webgl'
+import { WebLinksAddon } from '@xterm/addon-web-links'
+import { SearchAddon } from '@xterm/addon-search'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
 import '@xterm/xterm/css/xterm.css'
 import { useAgentsStore } from '../stores/agents'
 
@@ -51,8 +96,53 @@ const { agentList, activeAgentId } = storeToRefs(store)
 
 const containerRef = ref(null)
 
-// Map of agentId → { terminal, fitAddon }
+// Map of agentId → { terminal, fitAddon, searchAddon }
 const terminals = {}
+
+// Search overlay state (Ctrl+F). The SearchAddon is per-terminal; the overlay
+// always drives the currently active agent's addon.
+const searchOpen = ref(false)
+const searchTerm = ref('')
+const searchInputRef = ref(null)
+
+// Match-highlight colors tuned to the terminal theme.
+const searchDecorations = {
+  matchBackground: '#3b5070',
+  matchBorder: '#1f6feb',
+  matchOverviewRuler: '#58a6ff',
+  activeMatchBackground: '#58a6ff',
+  activeMatchBorder: '#79c0ff',
+  activeMatchColorOverviewRuler: '#79c0ff',
+}
+
+function runSearch(forward = true) {
+  const id = activeAgentId.value
+  const addon = id ? terminals[id]?.searchAddon : null
+  if (!addon) return
+  const term = searchTerm.value
+  if (!term) { addon.clearDecorations?.(); return }
+  const opts = { decorations: searchDecorations }
+  if (forward) addon.findNext(term, opts)
+  else addon.findPrevious(term, opts)
+}
+
+function openSearch() {
+  searchOpen.value = true
+  nextTick(() => searchInputRef.value?.focus())
+  if (searchTerm.value) runSearch(true)
+}
+
+function closeSearch() {
+  searchOpen.value = false
+  const id = activeAgentId.value
+  if (id) {
+    terminals[id]?.searchAddon?.clearDecorations?.()
+    terminals[id]?.terminal?.focus()
+  }
+}
+
+// Re-run search live as the term changes.
+watch(searchTerm, () => runSearch(true))
 
 // Track last PTY dimensions sent per agent — only send resize when they actually change
 // This prevents unnecessary PTY redraws (which falsely trigger the "Running" state) on agent switch
@@ -130,7 +220,29 @@ function mountTerminal(agentId, el) {
   })
 
   terminal.loadAddon(fitAddon)
+
+  // Correct width for wide chars / emoji that Claude's output uses. Requires
+  // allowProposedApi (set above); activeVersion must be set after the addon loads.
+  terminal.loadAddon(new Unicode11Addon())
+  terminal.unicode.activeVersion = '11'
+
+  // Make URLs in the output clickable (Claude frequently prints links).
+  terminal.loadAddon(new WebLinksAddon())
+
+  // Ctrl+F search across the scrollback buffer.
+  const searchAddon = new SearchAddon()
+  terminal.loadAddon(searchAddon)
+
   terminal.open(el)
+
+  // GPU-accelerated rendering. Must load after open(). If WebGL is unavailable
+  // or its context is lost at runtime, dispose the addon so xterm falls back to
+  // the DOM renderer instead of rendering a blank terminal.
+  try {
+    const webgl = new WebglAddon()
+    webgl.onContextLoss(() => { try { webgl.dispose() } catch {} })
+    terminal.loadAddon(webgl)
+  } catch { /* WebGL unsupported — DOM renderer stays active */ }
 
   // Ctrl+C with selection → copy. Ctrl+V → suppress xterm's key handling;
   // the actual paste is handled by the 'paste' event listener below.
@@ -145,6 +257,9 @@ function mountTerminal(agentId, el) {
     // Returning false prevents xterm from treating Ctrl+V as a raw key sequence.
     // The browser still fires a 'paste' event which our listener below handles.
     if (e.ctrlKey && e.code === 'KeyV') return false
+
+    // Ctrl+F opens our search overlay instead of the browser's find dialog.
+    if (e.ctrlKey && e.code === 'KeyF') { openSearch(); return false }
 
     return true
   })
@@ -188,7 +303,7 @@ function mountTerminal(agentId, el) {
     if (sel.trim()) selectedText.value = sel
   })
 
-  terminals[agentId] = { terminal, fitAddon }
+  terminals[agentId] = { terminal, fitAddon, searchAddon }
 
   // For the visible (active) agent, fit synchronously BEFORE replay so the
   // rolling buffer reflows into the correct dimensions. Hidden agents stay
@@ -241,6 +356,9 @@ function refitAndScroll(agentId, { focus = false } = {}) {
 // Resize active terminal when switching agents
 watch(activeAgentId, newId => {
   refreshSelectionState()
+  // The SearchAddon is per-terminal; close the overlay so its matches don't
+  // appear to "belong" to the newly active agent.
+  if (searchOpen.value) searchOpen.value = false
   if (!newId) return
   refitAndScroll(newId, { focus: true })
 })
