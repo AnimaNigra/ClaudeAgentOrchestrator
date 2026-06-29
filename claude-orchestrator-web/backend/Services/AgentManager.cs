@@ -113,6 +113,19 @@ public class AgentManager : IAsyncDisposable
     public async Task<Agent> SpawnAgentAsync(string name, string? cwd = null, string? resumeSessionId = null,
         string? worktreePath = null, string? worktreeBranch = null, string? originalCwd = null)
     {
+        // Validate the working directory before doing anything: a path that points
+        // to a file (or doesn't exist) would let the agent card appear but the PTY
+        // never starts, leaving a dead window. Reject it up front instead.
+        if (!string.IsNullOrWhiteSpace(cwd))
+        {
+            var dir = cwd.Trim().Trim('"');
+            if (File.Exists(dir))
+                throw new InvalidOperationException($"Path is a file, not a directory: {dir}");
+            if (!Directory.Exists(dir))
+                throw new InvalidOperationException($"Directory does not exist: {dir}");
+            cwd = dir;
+        }
+
         await _lock.WaitAsync();
         try
         {
