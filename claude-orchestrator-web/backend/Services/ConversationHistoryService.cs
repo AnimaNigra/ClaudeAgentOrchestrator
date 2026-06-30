@@ -62,21 +62,19 @@ public class ConversationHistoryService
                 catch { /* unreadable state → reuse base dir */ }
             }
 
-            Directory.CreateDirectory(candidate);
-            // Stamp the dir's CWD ownership on first resolution so a later agent with the
-            // same name but a different CWD detects the collision (the read above relies on it).
-            var stampPath = Path.Combine(candidate, ".state.json");
-            if (!File.Exists(stampPath))
+            try
             {
-                try
-                {
+                Directory.CreateDirectory(candidate);
+                // Stamp the dir's CWD ownership on first resolution so a later agent with the
+                // same name but a different CWD detects the collision (the read above relies on it).
+                var stampPath = Path.Combine(candidate, ".state.json");
+                if (!File.Exists(stampPath))
                     File.WriteAllText(stampPath, JsonSerializer.Serialize(new ConversationState
                     {
                         AgentId = agent.Id, Name = agent.Name, Cwd = agent.Cwd, SessionId = agent.SessionId,
                     }, JsonOpts));
-                }
-                catch { /* best effort */ }
             }
+            catch { /* best effort — return the path regardless; downstream writes are guarded */ }
             return candidate;
         });
     }
