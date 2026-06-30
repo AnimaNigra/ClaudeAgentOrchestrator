@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace ClaudeOrchestrator.Services;
@@ -57,4 +58,99 @@ public static partial class HistoryFormat
         var kept = turns.Skip(turns.Count - maxTurns);
         return head + string.Join("", kept);
     }
+
+    public static RenderedTurns RenderNewTurns(
+        IReadOnlyList<string> jsonlLines, string? afterUuid, Models.HistoryOptions options)
+    {
+        var sb = new StringBuilder();
+        var seenMarker = afterUuid is null;
+        string? lastUuid = afterUuid;
+
+        foreach (var line in jsonlLines)
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+
+            JsonElement root;
+            try { root = JsonDocument.Parse(line).RootElement; }
+            catch { continue; }                                   // malformed → ignore
+
+            var uuid = root.TryGetProperty("uuid", out var u) ? u.GetString() : null;
+
+            if (!seenMarker)
+            {
+                if (uuid == afterUuid) seenMarker = true;          // skip up to AND including marker
+                continue;
+            }
+
+            if (uuid is not null) lastUuid = uuid;                 // advance high-water mark
+
+            var type = root.TryGetProperty("type", out var t) ? t.GetString() : null;
+            if (!root.TryGetProperty("message", out var msg)) continue;
+            if (!msg.TryGetProperty("content", out var content)) continue;
+
+            if (type == "assistant")
+                RenderAssistantContent(sb, content, options);
+            else if (type == "user")
+                RenderUserToolResults(sb, content, options);      // human prompt text is skipped here
+        }
+
+        return new RenderedTurns(sb.ToString(), lastUuid);
+    }
+
+    private static void RenderAssistantContent(StringBuilder sb, JsonElement content, Models.HistoryOptions o)
+    {
+        if (content.ValueKind != JsonValueKind.Array) return;
+        foreach (var block in content.EnumerateArray())
+        {
+            var bt = block.TryGetProperty("type", out var x) ? x.GetString() : null;
+            if (bt == "text" && block.TryGetProperty("text", out var txt))
+            {
+                var s = txt.GetString();
+                if (!string.IsNullOrWhiteSpace(s))
+                    sb.Append("\n### 🤖 Claude\n\n").Append(s!.TrimEnd()).Append('\n');
+            }
+            else if (bt == "tool_use" && o.IncludeTools)
+            {
+                var name = block.TryGetProperty("name", out var n) ? n.GetString() : "tool";
+                sb.Append("\n> 🔧 **").Append(name).Append("**\n");
+                if (block.TryGetProperty("input", out var input))
+                    sb.Append("\n```json\n").Append(input.ToString()).Append("\n```\n");
+            }
+        }
+    }
+
+    private static void RenderUserToolResults(StringBuilder sb, JsonElement content, Models.HistoryOptions o)
+    {
+        if (!o.IncludeTools || content.ValueKind != JsonValueKind.Array) return;
+        foreach (var block in content.EnumerateArray())
+        {
+            var bt = block.TryGetProperty("type", out var x) ? x.GetString() : null;
+            if (bt != "tool_result") continue;
+            var text = ExtractToolResultText(block);
+            sb.Append("\n```\n").Append(Truncate(text, o.ToolResultMaxLines)).Append("\n```\n");
+        }
+    }
+
+    private static string ExtractToolResultText(JsonElement block)
+    {
+        if (!block.TryGetProperty("content", out var c)) return "";
+        if (c.ValueKind == JsonValueKind.String) return c.GetString() ?? "";
+        if (c.ValueKind == JsonValueKind.Array)
+        {
+            var sb = new StringBuilder();
+            foreach (var part in c.EnumerateArray())
+                if (part.TryGetProperty("text", out var pt)) sb.Append(pt.GetString());
+            return sb.ToString();
+        }
+        return c.ToString();
+    }
+
+    private static string Truncate(string text, int maxLines)
+    {
+        var lines = text.Replace("\r\n", "\n").Split('\n');
+        if (lines.Length <= maxLines) return text.TrimEnd();
+        return string.Join("\n", lines.Take(maxLines)) + "\n… (zkráceno)";
+    }
 }
+
+public record RenderedTurns(string Markdown, string? LastUuid);
