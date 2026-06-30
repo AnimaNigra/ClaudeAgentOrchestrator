@@ -47,6 +47,8 @@ public class HistoryFormatTests
         Assert.DoesNotContain("q1", trimmed);
         Assert.Contains("q2", trimmed);
         Assert.Contains("a2", trimmed);
+        // kept turns must stay on their own lines (separator not swallowed by trim)
+        Assert.Contains("\n### 🤖 Claude", trimmed);
     }
 
     [Fact]

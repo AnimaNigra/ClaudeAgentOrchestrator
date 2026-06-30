@@ -46,9 +46,11 @@ public static partial class HistoryFormat
 
         // Split on each "### " boundary (keep the marker on each chunk).
         var parts = body.Split(new[] { "\n### " }, StringSplitOptions.None);
-        // parts[0] starts with "### " already (the first turn); the rest lost their marker.
+        // parts[0] starts with "### " already (the first turn); the rest lost their
+        // "\n### " separator to the split, so re-add it (newline included) when rebuilding
+        // so kept turns stay on their own lines after a join.
         var turns = new List<string> { parts[0] };
-        for (var i = 1; i < parts.Length; i++) turns.Add("### " + parts[i]);
+        for (var i = 1; i < parts.Length; i++) turns.Add("\n### " + parts[i]);
 
         if (turns.Count <= maxTurns) return markdown;
 
