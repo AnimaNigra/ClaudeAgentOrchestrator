@@ -139,6 +139,7 @@ public class PtySession : IAsyncDisposable
 
         _agent.Pid    = _process.Id;
         _agent.Status = AgentStatus.Running;
+        _terminalLog = _conversationHistory?.CreateTerminalLogWriter(_agent);
 
         _ = Task.Run(ReadLoopAsync);
         _ = Task.Run(ReadStderrLoopAsync);
@@ -164,7 +165,9 @@ public class PtySession : IAsyncDisposable
                 // Feed the state detector
                 try
                 {
-                    var text = Encoding.UTF8.GetString(Convert.FromBase64String(base64));
+                    var bytes = Convert.FromBase64String(base64);
+                    _terminalLog?.Write(bytes);
+                    var text = Encoding.UTF8.GetString(bytes);
                     FeedStateDetector(text);
 
                     // Capture Claude Code session ID from exit message (only once)
@@ -325,6 +328,7 @@ public class PtySession : IAsyncDisposable
             new { agentId = _agent.Id, exitCode = _process?.ExitCode });
         OnExited?.Invoke();
         await RemoveHooksAsync();
+        if (_terminalLog is not null) { await _terminalLog.DisposeAsync(); _terminalLog = null; }
     }
 
     public Task KillAsync()
@@ -342,6 +346,7 @@ public class PtySession : IAsyncDisposable
         await KillAsync();
         _process?.Dispose();
         await RemoveHooksAsync();
+        if (_terminalLog is not null) { await _terminalLog.DisposeAsync(); _terminalLog = null; }
     }
 
     // ── Hooks injection ───────────────────────────────────────────────────
