@@ -212,4 +212,36 @@ public class ConversationHistoryService
         }
         catch { /* best effort */ }
     }
+
+    public async Task HandleClearAsync(Agent agent)
+    {
+        if (!Options.ConversationCapture) return;
+        var sem = LockFor(agent.Id);
+        await sem.WaitAsync();
+        try
+        {
+            var dir = ResolveAgentDir(agent);
+            var history = Path.Combine(dir, "history.md");
+            if (File.Exists(history))
+            {
+                var archiveDir = Path.Combine(dir, "archive");
+                Directory.CreateDirectory(archiveDir);
+                var stamp = DateTime.UtcNow.ToString("yyyy-MM-dd-HHmm");
+                var target = Path.Combine(archiveDir, $"history-{stamp}.md");
+                // avoid clobbering if two clears happen within the same minute
+                var n = 1;
+                while (File.Exists(target))
+                    target = Path.Combine(archiveDir, $"history-{stamp}-{n++}.md");
+                File.Move(history, target);
+            }
+
+            var state = LoadState(agent);
+            state.LastMessageUuid = null;
+            state.TurnCount = 0;
+            SaveState(agent, state);
+            await Task.CompletedTask;
+        }
+        catch { /* best effort */ }
+        finally { sem.Release(); }
+    }
 }

@@ -152,4 +152,35 @@ public class ConversationHistoryServiceTests : IDisposable
         await w.DisposeAsync();
         Assert.True(File.Exists(Path.Combine(svc.ResolveAgentDir(a), "terminal.log")));
     }
+
+    [Fact]
+    public async Task HandleClear_ArchivesHistoryAndResets()
+    {
+        var svc = New();
+        var a = A();
+        await svc.AppendUserPromptAsync(a, "before clear");
+        var dir = svc.ResolveAgentDir(a);
+
+        await svc.HandleClearAsync(a);
+
+        Assert.False(File.Exists(Path.Combine(dir, "history.md")));
+        var archived = Directory.GetFiles(Path.Combine(dir, "archive"), "history-*.md");
+        Assert.Single(archived);
+        Assert.Contains("before clear", await File.ReadAllTextAsync(archived[0]));
+
+        // a fresh turn after clear starts a brand-new history.md
+        await svc.AppendUserPromptAsync(a, "after clear");
+        var md = await File.ReadAllTextAsync(Path.Combine(dir, "history.md"));
+        Assert.Contains("after clear", md);
+        Assert.DoesNotContain("before clear", md);
+    }
+
+    [Fact]
+    public async Task HandleClear_NoHistory_NoOp()
+    {
+        var svc = New();
+        var a = A();
+        await svc.HandleClearAsync(a);   // must not throw
+        Assert.False(File.Exists(Path.Combine(svc.ResolveAgentDir(a), "history.md")));
+    }
 }
