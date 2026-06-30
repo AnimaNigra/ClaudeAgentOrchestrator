@@ -159,6 +159,14 @@ public class ConversationHistoryService
         try
         {
             var state = LoadState(agent);
+
+            // New transcript (agent dir reused for a fresh session, or /compact rotated the
+            // file): the stale high-water mark isn't present in the new transcript and would
+            // cause every turn to be skipped. Reset it so the new transcript renders from its
+            // start. A resumed session keeps the same transcriptPath, so dedup stays intact.
+            if (!string.Equals(state.TranscriptPath, transcriptPath, StringComparison.Ordinal))
+                state.LastMessageUuid = null;
+
             string[] lines;
             try { lines = await File.ReadAllLinesAsync(transcriptPath); }
             catch { return; }   // transcript locked/unreadable → skip this turn

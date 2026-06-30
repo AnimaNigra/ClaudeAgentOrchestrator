@@ -183,4 +183,21 @@ public class ConversationHistoryServiceTests : IDisposable
         await svc.HandleClearAsync(a);   // must not throw
         Assert.False(File.Exists(Path.Combine(svc.ResolveAgentDir(a), "history.md")));
     }
+
+    [Fact]
+    public async Task AppendAssistantTurn_NewTranscript_ResetsMarker_RendersFreshTurns()
+    {
+        var svc = New();
+        var a = A();
+        await svc.AppendAssistantTurnAsync(a, await WriteTranscript(AText)); // session 1: uuid a1 -> "hotovo"
+
+        // session 2: a different transcript file with a different uuid (agent dir reused)
+        var t2 = await WriteTranscript(
+            """{"type":"assistant","uuid":"b1","message":{"role":"assistant","content":[{"type":"text","text":"druhá session"}]}}""");
+        await svc.AppendAssistantTurnAsync(a, t2);
+
+        var md = await File.ReadAllTextAsync(Path.Combine(svc.ResolveAgentDir(a), "history.md"));
+        Assert.Contains("hotovo", md);          // session 1 retained
+        Assert.Contains("druhá session", md);   // session 2 NOT dropped (marker reset on new transcript)
+    }
 }

@@ -79,4 +79,12 @@ public class TranscriptRenderTests
         Assert.Contains("Jasně", r.Markdown);
         Assert.Equal("a1", r.LastUuid);
     }
+
+    [Fact]
+    public void RenderNewTurns_AfterUuidNotFound_RendersNothing_KeepsMarker()
+    {
+        var r = HistoryFormat.RenderNewTurns(new[] { AssistantText }, "nonexistent", Full);
+        Assert.Equal("", r.Markdown);
+        Assert.Equal("nonexistent", r.LastUuid);
+    }
 }
