@@ -43,6 +43,33 @@ public class AgentManager : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Adopt a session id captured from a hook payload onto a freshly-running agent.
+    /// Returns true if it set a previously-empty SessionId. Worktree agents are skipped
+    /// (excluded from session history). Pure — no I/O — so it is unit-testable.
+    /// </summary>
+    public static bool TryAdoptSessionId(Agent agent, string? sessionId)
+    {
+        if (string.IsNullOrEmpty(sessionId)) return false;
+        if (!string.IsNullOrEmpty(agent.SessionId)) return false;
+        if (agent.WorktreePath is not null) return false;
+        agent.SessionId = sessionId;
+        return true;
+    }
+
+    /// <summary>
+    /// Called from hook endpoints with the payload's session_id. Persists the id to the
+    /// history record immediately so the session is resumable even after a hard crash
+    /// (the old exit-message regex never fires on power loss).
+    /// </summary>
+    public async Task CaptureSessionIdAsync(string agentId, string? sessionId)
+    {
+        if (!_agents.TryGetValue(agentId, out var agent)) return;
+        if (!TryAdoptSessionId(agent, sessionId)) return;
+        if (_historyService is not null && agent.WorktreePath is null)
+            await _historyService.SaveAgentAsync(agent);
+    }
+
     public async Task NotifyAsync(string agentId, string message)
     {
         if (!_agents.ContainsKey(agentId)) return;
