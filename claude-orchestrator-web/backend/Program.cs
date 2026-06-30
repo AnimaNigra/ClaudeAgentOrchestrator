@@ -41,6 +41,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddHttpClient("vite", c => c.BaseAddress = new Uri($"http://localhost:{vitePort}"));
 builder.Services.AddSingleton<TaskService>();
 builder.Services.AddSingleton<AgentHistoryService>();
+builder.Services.AddSingleton<ConversationHistoryService>();
 builder.Services.AddSingleton<PriorityService>();
 builder.Services.AddSingleton<GitReviewService>();
 builder.Services.AddSingleton<WorktreeService>();
@@ -50,7 +51,9 @@ builder.Services.AddSingleton<AgentManager>(sp =>
 {
     var hub = sp.GetRequiredService<IHubContext<AgentHub>>();
     var historyService = sp.GetRequiredService<AgentHistoryService>();
-    var manager = new AgentManager(maxAgents: 10, orchestratorUrl: $"http://localhost:{port}", historyService: historyService);
+    var conversationHistory = sp.GetRequiredService<ConversationHistoryService>();
+    var manager = new AgentManager(maxAgents: 10, orchestratorUrl: $"http://localhost:{port}",
+        historyService: historyService, conversationHistory: conversationHistory);
     manager.AddEventListener(async (agentId, eventType, data) =>
     {
         // Don't include the full agent object in high-frequency PTY events —

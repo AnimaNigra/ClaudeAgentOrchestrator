@@ -74,12 +74,17 @@ public class PtySession : IAsyncDisposable
     // when multiple agents share the same CWD.
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> SettingsFileLocks = new();
 
+    private readonly ConversationHistoryService? _conversationHistory;
+    private TerminalLogWriter? _terminalLog;
+
     public PtySession(Agent agent, Func<string, string, object, Task> emitEvent,
-        string orchestratorUrl = "http://localhost:5050")
+        string orchestratorUrl = "http://localhost:5050",
+        ConversationHistoryService? conversationHistory = null)
     {
         _agent = agent;
         _emitEvent = emitEvent;
         _orchestratorUrl = orchestratorUrl;
+        _conversationHistory = conversationHistory;
     }
 
     // ── Startup ───────────────────────────────────────────────────────────

@@ -12,13 +12,16 @@ public class AgentManager : IAsyncDisposable
     private readonly int _maxAgents;
     public readonly string OrchestratorUrl;
     private readonly AgentHistoryService? _historyService;
+    private readonly ConversationHistoryService? _conversationHistory;
 
     public AgentManager(int maxAgents = 10, string orchestratorUrl = "http://localhost:5050",
-        AgentHistoryService? historyService = null)
+        AgentHistoryService? historyService = null,
+        ConversationHistoryService? conversationHistory = null)
     {
         _maxAgents = maxAgents;
         OrchestratorUrl = orchestratorUrl;
         _historyService = historyService;
+        _conversationHistory = conversationHistory;
     }
 
     public void AddEventListener(Func<string, string, object, Task> listener)
@@ -161,7 +164,7 @@ public class AgentManager : IAsyncDisposable
                 Name = name, Cwd = cwd, ResumeSessionId = resumeSessionId,
                 WorktreePath = worktreePath, WorktreeBranch = worktreeBranch, OriginalCwd = originalCwd,
             };
-            var session = new PtySession(agent, EmitEventAsync, OrchestratorUrl);
+            var session = new PtySession(agent, EmitEventAsync, OrchestratorUrl, _conversationHistory);
 
             // Wire up history persistence + cleanup on natural exit
             session.OnExited = () =>
