@@ -99,6 +99,7 @@ public class ConversationHistoryService
             await AppendDurableAsync(HistoryPath(agent), HistoryFormat.RenderUserPrompt(prompt));
             var state = LoadState(agent);
             state.TurnCount++;
+            TrimIfNeeded(agent, state);
             SaveState(agent, state);
         }
         catch { /* best effort */ }
@@ -146,5 +147,69 @@ public class ConversationHistoryService
         var bytes = Encoding.UTF8.GetBytes(content);
         await fs.WriteAsync(bytes);
         fs.Flush(flushToDisk: true);
+    }
+
+    public async Task AppendAssistantTurnAsync(Agent agent, string? transcriptPath)
+    {
+        if (!Options.ConversationCapture) return;
+        if (string.IsNullOrEmpty(transcriptPath) || !File.Exists(transcriptPath)) return;
+
+        var sem = LockFor(agent.Id);
+        await sem.WaitAsync();
+        try
+        {
+            var state = LoadState(agent);
+            string[] lines;
+            try { lines = await File.ReadAllLinesAsync(transcriptPath); }
+            catch { return; }   // transcript locked/unreadable → skip this turn
+
+            var rendered = HistoryFormat.RenderNewTurns(lines, state.LastMessageUuid, Options);
+            state.LastMessageUuid = rendered.LastUuid;
+            state.TranscriptPath = transcriptPath;
+
+            if (rendered.Markdown.Length > 0)
+            {
+                await EnsureHeaderAsync(agent);
+                await AppendDurableAsync(HistoryPath(agent), rendered.Markdown);
+                state.TurnCount += CountTurns(rendered.Markdown);
+                TrimIfNeeded(agent, state);
+            }
+            SaveState(agent, state);
+        }
+        catch { /* best effort */ }
+        finally { sem.Release(); }
+    }
+
+    public TerminalLogWriter? CreateTerminalLogWriter(Agent agent)
+    {
+        if (!Options.RawTerminalLog) return null;
+        try { return new TerminalLogWriter(Path.Combine(ResolveAgentDir(agent), "terminal.log")); }
+        catch { return null; }
+    }
+
+    private static int CountTurns(string markdown)
+    {
+        var count = 0;
+        var idx = 0;
+        while ((idx = markdown.IndexOf("### ", idx, StringComparison.Ordinal)) >= 0)
+        { count++; idx += 4; }
+        return count;
+    }
+
+    private void TrimIfNeeded(Agent agent, ConversationState state)
+    {
+        if (state.TurnCount <= Options.MaxTurns) return;
+        try
+        {
+            var path = HistoryPath(agent);
+            var full = File.ReadAllText(path);
+            var trimmed = HistoryFormat.TrimToLastTurns(full, Options.MaxTurns);
+            if (!ReferenceEquals(trimmed, full) && trimmed.Length != full.Length)
+            {
+                File.WriteAllText(path, trimmed);
+                state.TurnCount = Options.MaxTurns;
+            }
+        }
+        catch { /* best effort */ }
     }
 }

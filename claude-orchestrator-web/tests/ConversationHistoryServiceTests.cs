@@ -72,4 +72,84 @@ public class ConversationHistoryServiceTests : IDisposable
 
     private static string[] Split(string s, string sep)
         => s.Split(new[] { sep }, StringSplitOptions.None).Skip(1).ToArray();
+
+    private async Task<string> WriteTranscript(params string[] lines)
+    {
+        Directory.CreateDirectory(_dir);
+        var p = Path.Combine(_dir, "t-" + Guid.NewGuid().ToString("N") + ".jsonl");
+        await File.WriteAllLinesAsync(p, lines);
+        return p;
+    }
+
+    private const string AText =
+        """{"type":"assistant","uuid":"a1","message":{"role":"assistant","content":[{"type":"text","text":"hotovo"}]}}""";
+    private const string AText2 =
+        """{"type":"assistant","uuid":"a2","message":{"role":"assistant","content":[{"type":"text","text":"a ještě tohle"}]}}""";
+
+    [Fact]
+    public async Task AppendAssistantTurn_WritesClaudeBlock_AndAdvancesMarker()
+    {
+        var svc = New();
+        var a = A();
+        var tp = await WriteTranscript(AText);
+        await svc.AppendAssistantTurnAsync(a, tp);
+
+        var md = await File.ReadAllTextAsync(Path.Combine(svc.ResolveAgentDir(a), "history.md"));
+        Assert.Contains("### 🤖 Claude", md);
+        Assert.Contains("hotovo", md);
+    }
+
+    [Fact]
+    public async Task AppendAssistantTurn_NoDuplicate_OnSecondCall()
+    {
+        var svc = New();
+        var a = A();
+        var tp = await WriteTranscript(AText);
+        await svc.AppendAssistantTurnAsync(a, tp);
+        await svc.AppendAssistantTurnAsync(a, tp);   // same transcript, nothing new
+
+        var md = await File.ReadAllTextAsync(Path.Combine(svc.ResolveAgentDir(a), "history.md"));
+        Assert.Single(md.Split("hotovo").Skip(1).ToArray());
+
+        // append a new line to the transcript → only the new turn is added
+        await File.AppendAllLinesAsync(tp, new[] { AText2 });
+        await svc.AppendAssistantTurnAsync(a, tp);
+        md = await File.ReadAllTextAsync(Path.Combine(svc.ResolveAgentDir(a), "history.md"));
+        Assert.Contains("a ještě tohle", md);
+        Assert.Single(md.Split("hotovo").Skip(1).ToArray());   // still only once
+    }
+
+    [Fact]
+    public async Task AppendAssistantTurn_TrimsToMaxTurns()
+    {
+        var svc = New(new HistoryOptions { MaxTurns = 2 });
+        var a = A();
+        await svc.AppendUserPromptAsync(a, "q1");
+        await svc.AppendAssistantTurnAsync(a, await WriteTranscript(AText));
+        await svc.AppendUserPromptAsync(a, "q2");
+
+        var md = await File.ReadAllTextAsync(Path.Combine(svc.ResolveAgentDir(a), "history.md"));
+        Assert.DoesNotContain("q1", md);   // oldest turn trimmed
+        Assert.Contains("q2", md);
+        Assert.StartsWith("# Konverzace", md);  // header preserved
+    }
+
+    [Fact]
+    public void CreateTerminalLogWriter_NullWhenDisabled()
+    {
+        var svc = New(new HistoryOptions { RawTerminalLog = false });
+        Assert.Null(svc.CreateTerminalLogWriter(A()));
+    }
+
+    [Fact]
+    public async Task CreateTerminalLogWriter_WritesIntoAgentDir()
+    {
+        var svc = New();
+        var a = A();
+        var w = svc.CreateTerminalLogWriter(a);
+        Assert.NotNull(w);
+        w!.Write(System.Text.Encoding.UTF8.GetBytes("raw"));
+        await w.DisposeAsync();
+        Assert.True(File.Exists(Path.Combine(svc.ResolveAgentDir(a), "terminal.log")));
+    }
 }
