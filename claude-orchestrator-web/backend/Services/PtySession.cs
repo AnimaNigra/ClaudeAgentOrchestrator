@@ -376,9 +376,8 @@ public class PtySession : IAsyncDisposable
             }
 
             var url = $"{_orchestratorUrl}/api/agents/{_agent.Id}";
-            AppendHook(hooksObj, "Stop",         $"curl -s -X POST \"{url}/hook/stop\"");
-            AppendHook(hooksObj, "Notification", $"curl -s --data-binary @- -H \"Content-Type: application/json\" \"{url}/hook/notification\"");
-            AppendHook(hooksObj, "PreToolUse",   $"curl -s --data-binary @- -H \"Content-Type: application/json\" \"{url}/hook/pre-tool\"");
+            foreach (var (evt, cmd) in BuildOrchestratorHooks(url))
+                AppendHook(hooksObj, evt, cmd);
 
             // Inject statusLine config to receive structured usage data
             if (json["statusLine"] is null)
@@ -397,6 +396,21 @@ public class PtySession : IAsyncDisposable
                 json.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         }
         finally { fileLock.Release(); }
+    }
+
+    /// <summary>
+    /// Orchestrator hook commands injected into the agent's settings.local.json.
+    /// Each value is a shell command Claude Code runs for that event.
+    /// <paramref name="agentUrl"/> is "{orchestratorUrl}/api/agents/{agentId}".
+    /// </summary>
+    public static IEnumerable<(string Event, string Command)> BuildOrchestratorHooks(string agentUrl)
+    {
+        const string post = "curl -s --data-binary @- -H \"Content-Type: application/json\"";
+        yield return ("Stop",             $"{post} \"{agentUrl}/hook/stop\"");
+        yield return ("Notification",     $"{post} \"{agentUrl}/hook/notification\"");
+        yield return ("PreToolUse",       $"{post} \"{agentUrl}/hook/pre-tool\"");
+        yield return ("UserPromptSubmit", $"{post} \"{agentUrl}/hook/user-prompt\"");
+        yield return ("SessionStart",     $"{post} \"{agentUrl}/hook/session-start\"");
     }
 
     private static void AppendHook(JsonObject hooksObj, string eventType, string command)
