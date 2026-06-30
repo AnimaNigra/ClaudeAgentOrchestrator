@@ -124,13 +124,65 @@ public class AgentsController : ControllerBase
 
     // ── Claude Code hooks ──────────────────────────────────────────────────
 
-    /// <summary>Called by the Stop hook when Claude finishes a response.</summary>
+    /// <summary>Stop hook — Claude finished a response. Marks idle + appends the turn.</summary>
     [HttpPost("{id}/hook/stop")]
-    public async Task<IActionResult> HookStop(string id)
+    public async Task<IActionResult> HookStop(string id, [FromBody] JsonElement body,
+        [FromServices] ConversationHistoryService history)
     {
-        await _manager.MarkIdleAsync(id);
+        try
+        {
+            await _manager.MarkIdleAsync(id);
+            var agent = _manager.GetAgent(id);
+            if (agent is not null)
+            {
+                await _manager.CaptureSessionIdAsync(id, Str(body, "session_id"));
+                await history.AppendAssistantTurnAsync(agent, Str(body, "transcript_path"));
+            }
+        }
+        catch { /* hooks are best-effort — never fail the hook HTTP call */ }
         return Ok();
     }
+
+    /// <summary>UserPromptSubmit hook — the user submitted a prompt. Captured immediately.</summary>
+    [HttpPost("{id}/hook/user-prompt")]
+    public async Task<IActionResult> HookUserPrompt(string id, [FromBody] JsonElement body,
+        [FromServices] ConversationHistoryService history)
+    {
+        try
+        {
+            var agent = _manager.GetAgent(id);
+            if (agent is not null)
+            {
+                await _manager.CaptureSessionIdAsync(id, Str(body, "session_id"));
+                await history.AppendUserPromptAsync(agent, Str(body, "prompt") ?? "");
+            }
+        }
+        catch { /* hooks are best-effort — never fail the hook HTTP call */ }
+        return Ok();
+    }
+
+    /// <summary>SessionStart hook — branch on source; "clear" archives the live history.</summary>
+    [HttpPost("{id}/hook/session-start")]
+    public async Task<IActionResult> HookSessionStart(string id, [FromBody] JsonElement body,
+        [FromServices] ConversationHistoryService history)
+    {
+        try
+        {
+            var agent = _manager.GetAgent(id);
+            if (agent is not null)
+            {
+                await _manager.CaptureSessionIdAsync(id, Str(body, "session_id"));
+                if (Str(body, "source") == "clear")
+                    await history.HandleClearAsync(agent);
+            }
+        }
+        catch { /* hooks are best-effort — never fail the hook HTTP call */ }
+        return Ok();
+    }
+
+    private static string? Str(JsonElement body, string prop)
+        => body.ValueKind == JsonValueKind.Object && body.TryGetProperty(prop, out var v)
+           && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
     /// <summary>Called by the Notification hook when Claude sends a notification.</summary>
     [HttpPost("{id}/hook/notification")]
