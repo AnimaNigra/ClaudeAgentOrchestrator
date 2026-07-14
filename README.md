@@ -18,6 +18,17 @@ A web-based dashboard for managing multiple [Claude Code](https://docs.anthropic
 - **Priority list** &mdash; drag-and-drop task notepad with JSON persistence
 - **Markdown Reader** &mdash; open `.md` / `.txt` files via path, drag-drop, or browse; renders GitHub-style Markdown with Mermaid diagrams, syntax highlighting, relative images, TOC with scroll-spy, multi-tab state, live reload, and print-to-PDF
 
+## Download & run (no build required)
+
+Prefer not to clone and build? Grab the ready-made Windows package:
+
+1. Go to the [**Releases**](https://github.com/AnimaNigra/ClaudeAgentOrchestrator/releases) page and download the latest `ClaudeAgentOrchestrator-win-x64-*.zip`.
+2. Unzip it anywhere.
+3. Make sure you have [Node.js LTS](https://nodejs.org/) and the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`npm install -g @anthropic-ai/claude-code`). **.NET is not required — it is bundled.**
+4. Run `Spustit.bat` (or `ClaudeOrchestrator.exe`) and open `http://localhost:6001`.
+
+See `START-HERE.txt` inside the zip for details and troubleshooting. Windows only for now.
+
 ## Quick Start
 
 ### Prerequisites
