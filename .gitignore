@@ -498,3 +498,6 @@ claude-orchestrator-web/backend/wwwroot/
 # Runtime data
 tmp/
 **/data/
+
+# Release build output (distributable zip is published via GitHub Releases, never committed)
+dist/

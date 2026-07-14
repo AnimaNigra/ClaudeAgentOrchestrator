@@ -1,0 +1,6 @@
+# Windows launcher and the shipped text guide must use CRLF so they behave
+# correctly in cmd.exe / Notepad regardless of the committer's platform or
+# git autocrlf setting. The build script copies these files verbatim into the
+# release zip, so the working-tree line endings are what users receive.
+*.bat text eol=crlf
+scripts/dist-assets/*.txt text eol=crlf

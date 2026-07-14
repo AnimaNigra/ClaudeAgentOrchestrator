@@ -1,0 +1,56 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Derive version from tag
+        id: version
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # Reject anything that isn't a plain semver-ish version so a crafted
+          # tag name can't smuggle shell/PowerShell metacharacters downstream.
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]]; then
+            echo "::error::Tag '${GITHUB_REF_NAME}' does not yield a valid version (got '${version}')"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Build release zip
+        shell: pwsh
+        # Pass the version via env (not inline ${{ }} expansion into the run
+        # body) so the tag-derived value can never be interpreted as script.
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: ./scripts/build-release.ps1 -Version $env:VERSION
+
+      - name: Create GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Idempotent: if the release already exists (job re-run / re-pushed tag),
+        # attach/replace the asset instead of failing on "release already exists".
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.zip --title "$GITHUB_REF_NAME" --generate-notes \
+            || gh release upload "$GITHUB_REF_NAME" dist/*.zip --clobber
