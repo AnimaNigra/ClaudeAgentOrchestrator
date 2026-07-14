@@ -130,6 +130,12 @@ public class PtySession : IAsyncDisposable
         psi.EnvironmentVariables["CLAUDE_ORCHESTRATOR_URL"] = _orchestratorUrl;
         psi.EnvironmentVariables["CLAUDE_AGENT_ID"]         = _agent.Id;
 
+        // Claude Code 2.1.187+ grabs the mouse in fullscreen mode (clickable menus),
+        // which makes the terminal forward mouse events instead of letting the user
+        // drag-select text — breaking copy from the xterm.js terminal. Disable it so
+        // selection/copy works; wheel scroll is unaffected. (Flag added in 2.1.195.)
+        psi.EnvironmentVariables["CLAUDE_CODE_DISABLE_MOUSE_CLICKS"] = "1";
+
         // Inject .claude/settings.json with hooks into the agent's working directory
         await InjectHooksAsync(_agent.Cwd ?? Directory.GetCurrentDirectory());
 
