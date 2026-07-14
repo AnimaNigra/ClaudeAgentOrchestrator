@@ -513,30 +513,104 @@ public class PtySession : IAsyncDisposable
 
     // ── Command resolution ────────────────────────────────────────────────
 
+    /// <summary>
+    /// Resolves how to launch Claude Code, independent of install method (npm global
+    /// or native <c>install.ps1</c>) and independent of whether the backend process
+    /// inherited an up-to-date PATH.
+    ///
+    /// Order (Windows), first real executable wins:
+    ///   1. claude.exe found on PATH            — native install on PATH, custom installs
+    ///   2. %USERPROFILE%\.local\bin\claude.exe — native installer default, even if PATH is stale
+    ///   3. npm global ...\@anthropic-ai\claude-code\bin\claude.exe
+    ///   4. npm global ...\@anthropic-ai\claude-code\cli.js  → node cli.js
+    ///   5. bare "claude" (last resort — node-pty may report "File not found")
+    ///
+    /// node-pty (ConPTY) needs a real .exe: it cannot spawn npm's claude.ps1/.cmd shims,
+    /// so the PATH walk deliberately looks only for claude.exe.
+    /// </summary>
     private static async Task<(string cmd, string[] args)> ResolveClaudeAsync()
     {
         if (!OperatingSystem.IsWindows())
             return ("claude", []);
 
+        var pathEnv     = Environment.GetEnvironmentVariable("PATH")        ?? "";
+        var userProfile = Environment.GetEnvironmentVariable("USERPROFILE") ?? "";
+
+        // Fast, in-process strategies first (PATH walk + known native location).
+        if (ResolveClaudeFromPath(pathEnv, userProfile, File.Exists) is { } fromPath)
+            return fromPath;
+
+        // Fall back to asking npm for its global package dir (spawns a subprocess).
+        string? npmRoot = null;
         try
         {
-            var npmRoot = await RunCaptureAsync("cmd", "/c npm root -g");
-            npmRoot = npmRoot.Trim();
-            var packageDir = Path.Combine(npmRoot, "@anthropic-ai", "claude-code");
-
-            // Claude Code 2.x ships a native binary
-            var nativeExe = Path.Combine(packageDir, "bin", "claude.exe");
-            if (File.Exists(nativeExe))
-                return (nativeExe, []);
-
-            // Older versions used a Node.js entry point
-            var cliJs = Path.Combine(packageDir, "cli.js");
-            if (File.Exists(cliJs))
-                return ("node", [cliJs]);
+            npmRoot = (await RunCaptureAsync("cmd", "/c npm root -g")).Trim();
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[PtySession] 'npm root -g' failed while resolving claude: {ex.Message}");
+        }
+
+        if (ResolveClaudeFromNpm(npmRoot, File.Exists) is { } fromNpm)
+            return fromNpm;
+
+        Console.Error.WriteLine(
+            "[PtySession] Could not locate a real claude executable via PATH, " +
+            @"%USERPROFILE%\.local\bin, or npm global. Falling back to bare 'claude' — " +
+            "node-pty may report 'File not found'. Install Claude Code so claude.exe is on " +
+            "PATH, or run 'npm i -g @anthropic-ai/claude-code'.");
 
         return ("claude", []);
+    }
+
+    /// <summary>
+    /// Resolves claude.exe from PATH or the native-installer default location.
+    /// Returns null if no real executable is found. Extracted for unit testing.
+    /// </summary>
+    internal static (string cmd, string[] args)? ResolveClaudeFromPath(
+        string pathEnv, string userProfile, Func<string, bool> fileExists)
+    {
+        // 1. A real claude.exe anywhere on PATH. We look only for the .exe on purpose:
+        //    npm's claude.ps1/.cmd shims can't be spawned by node-pty (ConPTY).
+        foreach (var dir in pathEnv.Split(Path.PathSeparator))
+        {
+            var trimmed = dir.Trim();
+            if (trimmed.Length == 0) continue;
+            var candidate = Path.Combine(trimmed, "claude.exe");
+            if (fileExists(candidate)) return (candidate, []);
+        }
+
+        // 2. Native installer default, in case this process never got the refreshed PATH
+        //    (services/scheduled tasks don't inherit a just-updated user PATH).
+        if (userProfile.Length > 0)
+        {
+            var nativeExe = Path.Combine(userProfile, ".local", "bin", "claude.exe");
+            if (fileExists(nativeExe)) return (nativeExe, []);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Resolves claude from an npm global package root (native binary or cli.js entry point).
+    /// Returns null if npmRoot is empty or the package isn't there. Extracted for unit testing.
+    /// </summary>
+    internal static (string cmd, string[] args)? ResolveClaudeFromNpm(
+        string? npmRoot, Func<string, bool> fileExists)
+    {
+        if (string.IsNullOrWhiteSpace(npmRoot)) return null;
+
+        var packageDir = Path.Combine(npmRoot, "@anthropic-ai", "claude-code");
+
+        // 3. Claude Code 2.x ships a native binary inside the npm package.
+        var nativeExe = Path.Combine(packageDir, "bin", "claude.exe");
+        if (fileExists(nativeExe)) return (nativeExe, []);
+
+        // 4. Older versions used a Node.js entry point.
+        var cliJs = Path.Combine(packageDir, "cli.js");
+        if (fileExists(cliJs)) return ("node", [cliJs]);
+
+        return null;
     }
 
     private static string FindNodeExe()
