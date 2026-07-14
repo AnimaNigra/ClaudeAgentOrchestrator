@@ -49,22 +49,33 @@
           </RouterLink>
         </nav>
       </div>
-      <div class="flex gap-4 text-xs text-gray-400">
+      <div class="flex items-center gap-4 text-xs text-gray-400">
         <span>{{ store.agentList.length }} agents</span>
         <span>{{ runningCount }} running</span>
+        <button
+          @click="showHelp = true"
+          class="w-5 h-5 flex items-center justify-center rounded-full border border-gray-600 text-gray-400 hover:text-white hover:border-gray-400 transition-colors"
+          title="Keyboard shortcuts"
+          aria-label="Keyboard shortcuts"
+        >?</button>
       </div>
     </header>
 
     <!-- Route content fills remaining space -->
     <RouterView class="flex-1 overflow-hidden flex flex-col" />
+
+    <HelpDialog :show="showHelp" @close="showHelp = false" />
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useAgentsStore } from './stores/agents'
+import HelpDialog from './components/HelpDialog.vue'
 
 const store = useAgentsStore()
+
+const showHelp = ref(false)
 
 const runningCount = computed(() =>
   store.agentList.filter(a => a.status === 'Running').length

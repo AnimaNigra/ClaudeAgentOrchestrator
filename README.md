@@ -72,6 +72,30 @@ kill backend
 
 Click an agent card in the sidebar (or use `select`) and type directly into the terminal. Claude Code confirmation prompts work as normal.
 
+### Keyboard shortcuts
+
+Also available in-app via the **?** button in the top-right corner of the header.
+
+**Agent terminal**
+
+| Shortcut | Action |
+|----------|--------|
+| `Shift` + drag | Select text |
+| `Ctrl` + `C` | Copy selection |
+| `Ctrl` + `V` | Paste |
+| `Ctrl` + `F` | Search in terminal |
+| `Enter` / `Shift` + `Enter` | Next / previous search match |
+| `Esc` | Close search |
+
+**Command bar**
+
+| Shortcut | Action |
+|----------|--------|
+| `Enter` | Send command to agent |
+| `↑` / `↓` | Command history |
+
+> In the agent terminal Claude Code captures the mouse (for clickable menus in fullscreen mode), so a plain drag is sent to Claude instead of selecting text. Hold **`Shift`** while dragging to select and copy.
+
 ### Worktrees
 
 Click the **🌿 worktree** button on any agent card to create an isolated git worktree. A new agent spawns in the worktree directory (`<project>-wt-<name>/`) on its own branch. Manage all worktrees from the **Worktrees** tab.
