@@ -50,7 +50,7 @@ dotnet publish $Csproj -c Release -r $Runtime --self-contained `
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed ($LASTEXITCODE)" }
 
 Write-Host "==> Adding launcher and guide"
-Copy-Item (Join-Path $AssetsDir "Spustit.bat")   $Staging
+Copy-Item (Join-Path $AssetsDir "Start.bat")     $Staging
 Copy-Item (Join-Path $AssetsDir "START-HERE.txt") $Staging
 
 Write-Host "==> Creating zip"

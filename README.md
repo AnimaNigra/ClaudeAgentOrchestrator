@@ -25,7 +25,7 @@ Prefer not to clone and build? Grab the ready-made Windows package:
 1. Go to the [**Releases**](https://github.com/AnimaNigra/ClaudeAgentOrchestrator/releases) page and download the latest `ClaudeAgentOrchestrator-win-x64-*.zip`.
 2. Unzip it anywhere.
 3. Make sure you have [Node.js LTS](https://nodejs.org/) and the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`npm install -g @anthropic-ai/claude-code`). **.NET is not required — it is bundled.**
-4. Run `Spustit.bat` (or `ClaudeOrchestrator.exe`) and open `http://localhost:6001`.
+4. Run `Start.bat` (or `ClaudeOrchestrator.exe`) and open `http://localhost:6001`.
 
 See `START-HERE.txt` inside the zip for details and troubleshooting. Windows only for now.
 

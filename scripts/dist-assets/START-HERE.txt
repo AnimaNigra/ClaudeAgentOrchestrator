@@ -1,37 +1,37 @@
 ========================================================
- Claude Agent Orchestrator - jak to spustit
+ Claude Agent Orchestrator - how to run it
 ========================================================
 
-CO POTREBUJES (prerekvizity)
-----------------------------
+WHAT YOU NEED (prerequisites)
+-----------------------------
 1) Node.js LTS        -> https://nodejs.org/
-2) Claude Code CLI    -> v prikazove radce spust:
+2) Claude Code CLI    -> in a terminal, run:
                          npm install -g @anthropic-ai/claude-code
 
-.NET NENI potreba - je uz zabaleny uvnitr.
+.NET is NOT required - it is bundled inside.
 
-SPUSTENI
---------
-1) Rozbal cely tento zip do slozky (napr. C:\ClaudeOrchestrator).
-2) Dvojklik na "Spustit.bat".
-   (Nebo primo na "ClaudeOrchestrator.exe".)
-3) Otevri prohlizec na adrese:  http://localhost:6001
+HOW TO RUN
+----------
+1) Unzip this whole archive into a folder (e.g. C:\ClaudeOrchestrator).
+2) Double-click "Start.bat".
+   (Or run "ClaudeOrchestrator.exe" directly.)
+3) Open your browser at:  http://localhost:6001
 
-KDE JSOU DATA
--------------
-Aplikace si uklada data do slozky "data" vedle programu
-(agents.json, priorities.json, historie).
+WHERE YOUR DATA LIVES
+---------------------
+The app stores its data in the "data" folder next to the program
+(agents.json, priorities.json, history).
 
-ZMENA PORTU
------------
-Uprav "appsettings.json" -> polozka "Port",
-nebo nastav promennou prostredi Port=8080.
+CHANGING THE PORT
+-----------------
+Edit "appsettings.json" -> the "Port" value,
+or set the environment variable Port=8080.
 
-PROBLEMY
---------
-* "Node.js neni nainstalovany" - nainstaluj Node LTS (viz vyse).
-* Port 6001 obsazeny - zmen port (viz vyse).
-* Windows SmartScreen ("Windows ochranil pocitac") - program neni
-  digitalne podepsany. Klikni "Dalsi informace" -> "Presto spustit".
+TROUBLESHOOTING
+---------------
+* "Node.js is not installed" - install Node LTS (see above).
+* Port 6001 in use - change the port (see above).
+* Windows SmartScreen ("Windows protected your PC") - the program is
+  not digitally signed. Click "More info" -> "Run anyway".
 
 ========================================================
