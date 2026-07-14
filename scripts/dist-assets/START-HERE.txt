@@ -1,0 +1,37 @@
+========================================================
+ Claude Agent Orchestrator - jak to spustit
+========================================================
+
+CO POTREBUJES (prerekvizity)
+----------------------------
+1) Node.js LTS        -> https://nodejs.org/
+2) Claude Code CLI    -> v prikazove radce spust:
+                         npm install -g @anthropic-ai/claude-code
+
+.NET NENI potreba - je uz zabaleny uvnitr.
+
+SPUSTENI
+--------
+1) Rozbal cely tento zip do slozky (napr. C:\ClaudeOrchestrator).
+2) Dvojklik na "Spustit.bat".
+   (Nebo primo na "ClaudeOrchestrator.exe".)
+3) Otevri prohlizec na adrese:  http://localhost:6001
+
+KDE JSOU DATA
+-------------
+Aplikace si uklada data do slozky "data" vedle programu
+(agents.json, priorities.json, historie).
+
+ZMENA PORTU
+-----------
+Uprav "appsettings.json" -> polozka "Port",
+nebo nastav promennou prostredi Port=8080.
+
+PROBLEMY
+--------
+* "Node.js neni nainstalovany" - nainstaluj Node LTS (viz vyse).
+* Port 6001 obsazeny - zmen port (viz vyse).
+* Windows SmartScreen ("Windows ochranil pocitac") - program neni
+  digitalne podepsany. Klikni "Dalsi informace" -> "Presto spustit".
+
+========================================================
