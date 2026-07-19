@@ -88,6 +88,13 @@ public class ConversationHistoryService
     private string HistoryPath(Agent a) => Path.Combine(ResolveAgentDir(a), "history.md");
     private string StatePath(Agent a) => Path.Combine(ResolveAgentDir(a), ".state.json");
 
+    /// <summary>
+    /// Absolute path to the agent's live conversation markdown (<c>history.md</c>). The file
+    /// may not exist yet (no turn captured, or just after a <c>/clear</c> archived it). Used by
+    /// the read-back drawer, which serves the content through the existing Reader endpoints.
+    /// </summary>
+    public string GetHistoryFilePath(Agent agent) => HistoryPath(agent);
+
     public async Task AppendUserPromptAsync(Agent agent, string prompt)
     {
         if (!Options.ConversationCapture) return;

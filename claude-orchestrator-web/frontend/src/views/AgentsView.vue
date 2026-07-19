@@ -36,13 +36,50 @@
         :agent-id="reviewAgentId"
         @close="reviewAgentId = null"
       />
-      <template v-else>
-        <TerminalPanel />
-        <VoiceDictateButton
-          v-if="store.activeAgentId"
-          @open="showVoiceDialog = true"
+      <div v-else class="flex h-full w-full overflow-hidden">
+        <!-- Terminal (shrinks when the conversation drawer is open; its own
+             ResizeObserver refits xterm automatically) -->
+        <div class="relative flex-1 min-w-0 overflow-hidden">
+          <TerminalPanel />
+          <VoiceDictateButton
+            v-if="store.activeAgentId"
+            @open="showVoiceDialog = true"
+          />
+          <!-- Read-back conversation toggle (top-left — clear of search/mic overlays) -->
+          <button
+            v-if="store.activeAgentId"
+            @click="toggleConversation"
+            :title="showConversation ? 'Skrýt přepis konverzace' : 'Zobrazit přepis konverzace (scrollovatelný, i na touchpadu)'"
+            aria-label="Přepnout přepis konverzace"
+            class="absolute top-2 left-2 z-20 w-9 h-9 flex items-center justify-center rounded-md border shadow-lg transition-colors"
+            :class="showConversation
+              ? 'bg-blue-600 border-blue-400 text-white hover:bg-blue-700'
+              : 'bg-gray-800/85 border-gray-600 text-gray-300 hover:bg-gray-700 hover:border-blue-500'"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/></svg>
+          </button>
+        </div>
+
+        <!-- Resize handle between terminal and drawer -->
+        <div
+          v-if="showConversation && store.activeAgentId"
+          class="w-1 flex-shrink-0 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-500/70 transition-colors"
+          @mousedown="startConvResize"
         />
-      </template>
+
+        <!-- Conversation read-back drawer -->
+        <div
+          v-if="showConversation && store.activeAgentId"
+          class="flex-shrink-0 h-full overflow-hidden"
+          :style="{ width: convWidth + 'px' }"
+        >
+          <ConversationDrawer
+            :agent-id="store.activeAgentId"
+            :agent-name="activeAgentName"
+            @close="closeConversation"
+          />
+        </div>
+      </div>
     </main>
   </div>
 
@@ -74,7 +111,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAgentsStore } from '../stores/agents'
 import AgentCard from '../components/AgentCard.vue'
 import TerminalPanel from '../components/TerminalPanel.vue'
@@ -84,12 +121,50 @@ import PermissionDialog from '../components/PermissionDialog.vue'
 import VoiceDictateButton from '../components/VoiceDictateButton.vue'
 import VoiceDictateDialog from '../components/VoiceDictateDialog.vue'
 import PromptDialog from '../components/PromptDialog.vue'
+import ConversationDrawer from '../components/ConversationDrawer.vue'
 
 const store = useAgentsStore()
 const cmdBar = ref(null)
 const showVoiceDialog = ref(false)
 const reviewAgentId = ref(null)
 const sidebarWidth = ref(Number(localStorage.getItem('sidebarWidth')) || 256)
+
+// Conversation read-back drawer (renders the active agent's history.md; see ConversationDrawer.vue)
+const showConversation = ref(localStorage.getItem('showConversation') === '1')
+const convWidth = ref(Number(localStorage.getItem('conversationWidth')) || 460)
+const activeAgentName = computed(
+  () => store.agentList.find(a => a.id === store.activeAgentId)?.name || ''
+)
+
+function toggleConversation() {
+  showConversation.value = !showConversation.value
+  localStorage.setItem('showConversation', showConversation.value ? '1' : '0')
+}
+
+function closeConversation() {
+  showConversation.value = false
+  localStorage.setItem('showConversation', '0')
+}
+
+function startConvResize(e) {
+  const startX = e.clientX
+  const startWidth = convWidth.value
+  const onMove = (ev) => {
+    // Drawer sits on the right, so dragging left widens it.
+    convWidth.value = Math.max(280, Math.min(900, startWidth - (ev.clientX - startX)))
+  }
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    localStorage.setItem('conversationWidth', String(convWidth.value))
+  }
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
 
 // Drag-and-drop reordering of the agent sidebar (session-only; mirrors PrioritiesView)
 const dragAgentId = ref(null)

@@ -42,6 +42,20 @@ public class AgentsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// Absolute path to the agent's live conversation markdown (history.md) plus whether it
+    /// exists yet. The read-back drawer feeds this path into the existing Reader endpoints
+    /// (/api/reader/content + /api/reader/watch) to render and live-update the transcript.
+    /// </summary>
+    [HttpGet("{id}/conversation-path")]
+    public IActionResult ConversationPath(string id, [FromServices] ConversationHistoryService history)
+    {
+        var agent = _manager.GetAgent(id);
+        if (agent is null) return NotFound();
+        var path = history.GetHistoryFilePath(agent);
+        return Ok(new { path, exists = System.IO.File.Exists(path) });
+    }
+
     /// <summary>Send keystrokes directly to the PTY (typed characters, Enter, Ctrl+C, etc.).</summary>
     [HttpPost("{id}/keystroke")]
     public async Task<IActionResult> Keystroke(string id, [FromBody] KeystrokeRequest req)
