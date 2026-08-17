@@ -21,6 +21,14 @@
    space as the wheel; Shift+drag on the rail still reaches the raw scrollback. */
 .xterm-viewport::-webkit-scrollbar { width: 0; height: 0; }
 
+/* xterm 6 draws a SECOND, independent scrollbar: Viewport.ts wraps the screen
+   in a VS Code SmoothScrollableElement whose overlay slider is 14px wide and
+   sits flush against the rail. It only gets the `visible` class once scrollback
+   exists, which is why it hides during short sessions. Hiding the element is
+   presentation only — `scrollLines()` drives the scrollable element's scroll
+   model, not its slider, so Shift+drag on the rail keeps working. */
+.xterm .xterm-scrollable-element > .scrollbar.vertical { display: none; }
+
 body {
   background: #0f1117;
   color: #e2e8f0;
