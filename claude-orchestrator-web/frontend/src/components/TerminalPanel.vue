@@ -1,12 +1,14 @@
 <template>
   <div ref="containerRef" class="relative w-full h-full bg-black overflow-hidden">
-    <!-- One div per agent; v-show preserves the xterm DOM while hiding it -->
+    <!-- One div per agent; v-show preserves the xterm DOM while hiding it.
+         The right edge is inset by the scroll rail's width so the rail never
+         covers the last column of Claude's box-drawn UI. -->
     <div
       v-for="agent in agentList"
       :key="agent.id"
       v-show="agent.id === activeAgentId"
       :ref="el => mountTerminal(agent.id, el)"
-      class="absolute inset-0"
+      class="absolute inset-y-0 left-0 right-3.5"
     />
     <div v-if="!activeAgentId" class="flex items-center justify-center h-full text-gray-600 text-sm select-none">
       No agent selected — type <code class="mx-1 text-blue-400">create &lt;name&gt;</code> to create one
@@ -15,7 +17,7 @@
     <!-- Search overlay (Ctrl+F): Enter = next, Shift+Enter = previous, Esc = close -->
     <div
       v-if="activeAgentId && searchOpen"
-      class="absolute top-3 right-3 z-20 flex items-center gap-1 bg-gray-900/95 border border-gray-700 rounded-md shadow-lg px-2 py-1"
+      class="absolute top-3 right-6 z-20 flex items-center gap-1 bg-gray-900/95 border border-gray-700 rounded-md shadow-lg px-2 py-1"
     >
       <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
@@ -53,6 +55,61 @@
       </button>
     </div>
 
+
+    <!-- Scroll rail.
+         Claude Code turns on mouse reporting, so xterm hands the wheel to the PTY
+         instead of scrolling its own viewport — the wheel scrolls Claude's view
+         (cleanly redrawn) while the native scrollbar walks xterm's raw scrollback
+         (a byte log of a redraw-in-place TUI, full of torn half-frames). Two
+         different scroll spaces. This rail drives the wheel one, so dragging it
+         behaves exactly like the wheel. Shift+drag reaches the raw scrollback. -->
+    <div
+      v-if="activeAgentId"
+      class="absolute inset-y-0 right-0 w-3.5 z-10 flex flex-col select-none touch-none
+             border-l border-gray-800 bg-gray-950/70 transition-opacity"
+      :class="railActive ? 'opacity-100' : 'opacity-60 hover:opacity-100'"
+    >
+      <button
+        class="rail-btn"
+        title="Scroll up (hold to repeat)"
+        aria-label="Scroll up"
+        @pointerdown="startRepeat($event, -1)"
+        @pointerup="stopRepeat"
+        @pointercancel="stopRepeat"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m6 15 6-6 6 6" /></svg>
+      </button>
+
+      <div
+        class="rail-grip"
+        title="Drag to scroll — hold Shift to scroll xterm's raw scrollback instead"
+        @pointerdown="onRailDown"
+        @pointermove="onRailMove"
+        @pointerup="onRailUp"
+        @pointercancel="onRailUp"
+        @wheel.prevent="onRailWheel"
+      />
+
+      <button
+        class="rail-btn"
+        title="Scroll down (hold to repeat)"
+        aria-label="Scroll down"
+        @pointerdown="startRepeat($event, 1)"
+        @pointerup="stopRepeat"
+        @pointercancel="stopRepeat"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m6 9 6 6 6-6" /></svg>
+      </button>
+
+      <button
+        class="rail-btn"
+        title="Jump to latest output"
+        aria-label="Jump to latest output"
+        @click="jumpToBottom"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 4v13M6 12l6 6 6-6" /></svg>
+      </button>
+    </div>
 
     <!-- Speak selection button: always visible while an agent is active.
          Dimmed when there's no selection so the user knows where to click. -->
@@ -143,6 +200,149 @@ function closeSearch() {
 
 // Re-run search live as the term changes.
 watch(searchTerm, () => runSearch(true))
+
+// ── Scroll rail ──────────────────────────────────────────────────────────────
+// Claude Code enables mouse reporting, so xterm forwards the wheel to the PTY
+// (CoreBrowserTerminal.bindMouse) instead of scrolling its own viewport. The
+// rail reproduces that by dispatching synthetic wheel events at the terminal:
+// xterm has no isTrusted check anywhere, so they take the exact same path and
+// get encoded in whatever protocol the app negotiated (SGR, vt200, …).
+
+const railActive = ref(false)
+
+// Drag distance that equals one wheel notch.
+const PX_PER_NOTCH = 14
+// Notch ceiling per frame. Claude repaints its whole frame per notch, so an
+// unthrottled flick would flood the PTY.
+const MAX_NOTCHES_PER_FRAME = 10
+// Lines per notch when scrolling xterm's own scrollback rather than the app's
+// view — that buffer holds up to `scrollback` lines, so it needs a bigger step.
+const RAW_LINES_PER_NOTCH = 5
+
+// One wheel event == one wheel report to the app regardless of deltaY magnitude
+// (bindMouse only reads its sign), so N notches need N events. deltaMode LINE
+// keeps xterm's trackpad heuristics and partial-scroll accumulator out of it.
+function emitWheelNotch(term, dir) {
+  const el = term.element
+  if (!el) return
+  const r = el.getBoundingClientRect()
+  el.dispatchEvent(new WheelEvent('wheel', {
+    deltaY: dir,
+    deltaMode: 1, // WheelEvent.DOM_DELTA_LINE
+    clientX: r.left + r.width / 2,
+    clientY: r.top + r.height / 2,
+    bubbles: true,
+    cancelable: true,
+  }))
+}
+
+// Scroll the active terminal by `lines` (negative = up).
+// raw=true forces xterm's own scrollback instead of the running app's view.
+function railScroll(lines, raw = false, cap = MAX_NOTCHES_PER_FRAME) {
+  const id = activeAgentId.value
+  const t = id ? terminals[id] : null
+  if (!t || !lines) return
+  const term = t.terminal
+
+  // The app owns the wheel once it turns on mouse reporting; in the alt buffer
+  // xterm additionally converts wheel into cursor keys. Both need real events.
+  // Everything else (plain shell at a prompt) has no listener to receive a
+  // synthetic wheel — untrusted events don't trigger the viewport's native
+  // scroll either — so drive xterm's scrollback directly.
+  const appOwnsWheel = term.modes.mouseTrackingMode !== 'none'
+    || term.buffer.active.type === 'alternate'
+
+  if (raw || !appOwnsWheel) {
+    // One line per notch would make a full-rail drag cover ~50 lines of a
+    // 10000-line scrollback, so give the raw space a coarser step.
+    try { term.scrollLines(lines * RAW_LINES_PER_NOTCH) } catch {}
+    return
+  }
+
+  const dir = lines < 0 ? -1 : 1
+  const n = Math.min(Math.abs(lines), cap)
+  for (let i = 0; i < n; i++) emitWheelNotch(term, dir)
+}
+
+// Drag state. Pixels are accumulated and converted to notches once per frame.
+let dragPx = 0
+let dragLastY = 0
+let dragRaf = 0
+let dragRaw = false
+
+function onRailDown(e) {
+  if (e.button !== 0) return
+  e.preventDefault()
+  e.currentTarget.setPointerCapture(e.pointerId)
+  railActive.value = true
+  dragLastY = e.clientY
+  dragPx = 0
+  dragRaw = e.shiftKey
+}
+
+function onRailMove(e) {
+  if (!railActive.value) return
+  dragPx += e.clientY - dragLastY
+  dragLastY = e.clientY
+  if (!dragRaf) dragRaf = requestAnimationFrame(flushDrag)
+}
+
+function flushDrag() {
+  dragRaf = 0
+  const notches = Math.trunc(dragPx / PX_PER_NOTCH)
+  if (!notches) return
+  dragPx -= notches * PX_PER_NOTCH
+  railScroll(notches, dragRaw)
+}
+
+function onRailUp(e) {
+  if (!railActive.value) return
+  railActive.value = false
+  try { e.currentTarget.releasePointerCapture(e.pointerId) } catch {}
+  if (dragRaf) { cancelAnimationFrame(dragRaf); dragRaf = 0 }
+  dragPx = 0
+}
+
+// The rail is a sibling overlay, not a child of terminal.element, so a real
+// wheel over it would otherwise go nowhere. Forward it as a single notch.
+function onRailWheel(e) {
+  if (!e.deltaY) return
+  railScroll(e.deltaY < 0 ? -1 : 1, e.shiftKey)
+}
+
+let repeatDelay = 0
+let repeatTimer = 0
+
+function startRepeat(e, dir) {
+  if (e.button !== 0) return
+  e.preventDefault()
+  e.currentTarget.setPointerCapture(e.pointerId)
+  railActive.value = true
+  railScroll(dir)
+  repeatDelay = setTimeout(() => {
+    repeatTimer = setInterval(() => railScroll(dir), 50)
+  }, 300)
+}
+
+function stopRepeat(e) {
+  clearTimeout(repeatDelay); repeatDelay = 0
+  clearInterval(repeatTimer); repeatTimer = 0
+  railActive.value = false
+  try { e?.currentTarget?.releasePointerCapture?.(e.pointerId) } catch {}
+}
+
+// xterm's scrollback has a real bottom to jump to. The app's own view has no
+// "go to end" in the wheel protocol, so send a burst of notches and let it
+// clamp. Claude Code advertises Ctrl+End for this, but sending `ESC [1;5F`
+// doesn't move it — and injecting keys into its input parser is riskier than
+// mouse reports anyway, which it can only read as scrolling.
+function jumpToBottom() {
+  const id = activeAgentId.value
+  const t = id ? terminals[id] : null
+  if (!t) return
+  try { t.terminal.scrollToBottom() } catch {}
+  railScroll(40, false, 40)
+}
 
 // Track last PTY dimensions sent per agent — only send resize when they actually change
 // This prevents unnecessary PTY redraws (which falsely trigger the "Running" state) on agent switch
@@ -391,6 +591,9 @@ onMounted(() => {
 onUnmounted(() => {
   resizeObs?.disconnect()
   clearTimeout(resizeDebounce)
+  clearTimeout(repeatDelay)
+  clearInterval(repeatTimer)
+  if (dragRaf) cancelAnimationFrame(dragRaf)
   try { window.speechSynthesis.cancel() } catch {}
   // Drop our handler refs so the store stops calling into disposed terminals
   // while we're unmounted; the rolling buffer keeps history for the next mount.
@@ -398,3 +601,44 @@ onUnmounted(() => {
   Object.values(terminals).forEach(({ terminal }) => terminal.dispose())
 })
 </script>
+
+<style scoped>
+.rail-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  height: 16px;
+  color: #6b7280;
+  transition: color .12s, background-color .12s;
+}
+.rail-btn:hover {
+  color: #58a6ff;
+  background: #1f2937;
+}
+.rail-btn svg {
+  width: 10px;
+  height: 10px;
+}
+
+/* Dotted grip, so the rail reads as a drag surface rather than a track with a
+   thumb — there is no thumb to draw: the app never reports how tall its own
+   content is or where in it we are, so this control is relative, not absolute. */
+.rail-grip {
+  flex: 1;
+  cursor: ns-resize;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    #4b5563 0, #4b5563 2px,
+    transparent 2px, transparent 5px
+  );
+  background-size: 2px 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: .5;
+  transition: opacity .12s;
+}
+.rail-grip:hover {
+  opacity: 1;
+}
+</style>

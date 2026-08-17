@@ -13,11 +13,13 @@
   outline: none !important;
 }
 
-/* Always-visible styled scrollbar for the xterm viewport */
-.xterm-viewport::-webkit-scrollbar        { width: 8px; }
-.xterm-viewport::-webkit-scrollbar-track  { background: transparent; }
-.xterm-viewport::-webkit-scrollbar-thumb  { background: #4b5563; border-radius: 4px; }
-.xterm-viewport::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+/* xterm's native viewport scrollbar is hidden on purpose. While an app holds
+   mouse reporting (Claude Code does), the wheel goes to the PTY and the
+   scrollbar walks xterm's raw scrollback instead — two different scroll spaces,
+   and the raw one is a byte log of a redraw-in-place TUI, so dragging it shows
+   torn half-frames. TerminalPanel's scroll rail replaces it and drives the same
+   space as the wheel; Shift+drag on the rail still reaches the raw scrollback. */
+.xterm-viewport::-webkit-scrollbar { width: 0; height: 0; }
 
 body {
   background: #0f1117;
