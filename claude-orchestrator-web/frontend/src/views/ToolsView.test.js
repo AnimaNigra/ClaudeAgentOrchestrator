@@ -25,7 +25,7 @@ describe('ToolsView', () => {
   it('vykreslí odkaz na každý nástroj', async () => {
     const wrapper = await mountAt('/tools/base64')
     const labels = wrapper.findAll('aside a').map(l => l.text())
-    expect(labels).toEqual(['Base64', 'URL', 'HTML', 'Basic Auth', 'JWT'])
+    expect(labels).toEqual(['Base64', 'URL', 'HTML', 'Basic Auth', 'JWT', 'UUID', 'Hash'])
   })
 
   it('přepnutí slugu vymění panel', async () => {
@@ -134,5 +134,39 @@ describe('ToolsView', () => {
     await keyField.setValue('obycejne-tajemstvi')
     await flushPromises()
     expect(wrapper.text()).not.toContain('vypadá jako PEM')
+  })
+
+  it('UUID nástroj vygeneruje požadovaný počet hodnot', async () => {
+    const wrapper = await mountAt('/tools/uuid')
+    expect(wrapper.find('h2').text()).toBe('UUID')
+
+    // Generuje se v onMounted, takže jedna hodnota tu je hned.
+    expect(wrapper.findAll('li')).toHaveLength(1)
+
+    await wrapper.find('input[type="number"]').setValue(3)
+    await wrapper.find('button').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    const values = wrapper.findAll('li code').map(c => c.text())
+    expect(values).toHaveLength(3)
+    expect(new Set(values).size).toBe(3)
+    expect(values[0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  })
+
+  it('Hash nástroj počítá SHA-256 a přepíná algoritmus', async () => {
+    const wrapper = await mountAt('/tools/hash')
+    expect(wrapper.find('h2').text()).toBe('Hash')
+
+    await wrapper.find('textarea').setValue('abc')
+    await flushPromises()
+    // Publikovaný vektor pro SHA-256("abc").
+    expect(wrapper.text()).toContain('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
+
+    const sha1Button = wrapper.findAll('button').find(b => b.text() === 'SHA-1')
+    await sha1Button.trigger('click')
+    await flushPromises()
+    // Publikovaný vektor pro SHA-1("abc") — jiná délka i hodnota, takže
+    // přepínač je prokazatelně funkční.
+    expect(wrapper.text()).toContain('a9993e364706816aba3e25717850c26c9cd0d89d')
   })
 })
