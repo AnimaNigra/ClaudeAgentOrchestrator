@@ -71,10 +71,19 @@ export async function verifyJwt(token, key) {
   const decoded = decodeJwt(token)
   if (!decoded.ok || !decoded.value) return VERIFY.NOT_ATTEMPTED
 
-  const secret = (key ?? '').trim()
-  if (!secret) return VERIFY.KEY_REQUIRED
+  const trimmedKey = typeof key === 'string' ? key.trim() : ''
+  if (!trimmedKey) return VERIFY.KEY_REQUIRED
 
   const algorithm = decoded.value.algorithm
+
+  // Decide algorithm support before touching the signature, so out-of-table
+  // algorithms report UNSUPPORTED, not INVALID.
+  if (!Object.hasOwn(HMAC_HASHES, algorithm) &&
+      !Object.hasOwn(RSA_HASHES, algorithm) &&
+      !Object.hasOwn(EC_PARAMS, algorithm)) {
+    return VERIFY.UNSUPPORTED
+  }
+
   const parts = token.trim().split('.')
   const signed = encoder.encode(`${parts[0]}.${parts[1]}`)
 
@@ -88,26 +97,26 @@ export async function verifyJwt(token, key) {
   // Cokoliv se uvnitř pokazí — vadný PEM, špatná křivka, nesouhlasná délka —
   // je pro uživatele "podpis neplatí", ne stack trace.
   try {
-    if (HMAC_HASHES[algorithm]) {
+    if (Object.hasOwn(HMAC_HASHES, algorithm)) {
       const cryptoKey = await crypto.subtle.importKey(
-        'raw', encoder.encode(secret),
+        'raw', encoder.encode(key),
         { name: 'HMAC', hash: HMAC_HASHES[algorithm] }, false, ['verify'])
       return await crypto.subtle.verify('HMAC', cryptoKey, signature, signed)
         ? VERIFY.VERIFIED : VERIFY.INVALID
     }
 
-    if (RSA_HASHES[algorithm]) {
+    if (Object.hasOwn(RSA_HASHES, algorithm)) {
       const cryptoKey = await crypto.subtle.importKey(
-        'spki', pemToBytes(secret),
+        'spki', pemToBytes(key),
         { name: 'RSASSA-PKCS1-v1_5', hash: RSA_HASHES[algorithm] }, false, ['verify'])
       return await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, signature, signed)
         ? VERIFY.VERIFIED : VERIFY.INVALID
     }
 
-    if (EC_PARAMS[algorithm]) {
+    if (Object.hasOwn(EC_PARAMS, algorithm)) {
       const { namedCurve, hash } = EC_PARAMS[algorithm]
       const cryptoKey = await crypto.subtle.importKey(
-        'spki', pemToBytes(secret),
+        'spki', pemToBytes(key),
         { name: 'ECDSA', namedCurve }, false, ['verify'])
       return await crypto.subtle.verify({ name: 'ECDSA', hash }, cryptoKey, signature, signed)
         ? VERIFY.VERIFIED : VERIFY.INVALID

@@ -67,6 +67,23 @@ MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE1gJeJ7FhzMGVzuEhJQBodqxi4909
 const NONE_TOKEN =
   'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkphbiBOZW1lYyIsImlhdCI6MTUxNjIzOTAyMn0.'
 
+const RS256_TOKEN =
+  "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkphbiBOZW1lYyIsImlhdCI6MTUxNjIzOTAyMn0.WOGrq3QinuGQgnPb8MQcpBN5YAR5dDNtTRuZjalUxG5zYe40Xjn2wt4aIPFuv--DV5rQH0ZDohsrEescocqAsCJyOF3HtzIxi43toTpVGHVpuzdqWXOW8yTBdiOi_lmBXBO0flziiFGaa6Cm4lMMyR5j1yFADw8MS3EEeFyBjnougu-I30v6Ex9_L86-UbFwj9Hymhzl64bv2nkIwSfMrTzfrjCZhMYoQ6lytkOIUBQh106yYfrn09r_SCS8XK7HBFoZJ2ARbUvTivKBh6gcTFqJdXfQtzWdpvVEKXqPHD-8GcqfzG5gEXsvxT0HPuD-6jhIX2ZVOg91RwN-eD5TVA"
+
+const RS256_PEM = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv/zEQFGp++MNqj15rlhC
+LIWoBaOr8SqT6cK8PKtvbDW8wb1rKjTHJgKwGV1MRBv2Skurkx1BCOrjG60KDhe0
+Fdx4ZTl0qfXJfjbj7Fy9fzhcCLV7WcjmZaGtz+UTC2vT6iFf/fPDiwPe7p1oDSKZ
+VYeWe69qwuLgzEDQMzWgufhfi9gKwHDisqIlMqHFzhzzqN+yBF3BW1ia9q4ueCW9
+9tjcrvSkv2xKYUyg33drnpP9ERZNkkOG04qWZ/6DyYcLsqBItWPUsqP801ON9fSj
+ht0A8yz7yDtw1X6oDlHSr94A6Y1OzkhSyarP2FRpFR067KnCrrV+eAriB1JpZn5D
+mwIDAQAB
+-----END PUBLIC KEY-----`
+
+// PS256 is a real, plausible algorithm deliberately absent from our tables.
+const PS256_TOKEN =
+  "eyJhbGciOiJQUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkphbiBOZW1lYyIsImlhdCI6MTUxNjIzOTAyMn0.hk9Wjz1cqiAz3hP6sF9ff1KKpjp03k280tGRwUEhPm_ZDtptjTL5APkvokOZ8wF8P_j5AI2fyE8X3QpLiRZ98Kx1ks01XD3cRVMeEnRRjBLO-e1OEzg1KDmC8rAV_KpIpHDxK7rovzRBacxPkb_3Drv45LXqNx2R9H9WBEsX_fzv9uAqiSvw4jXXPhxdoWC4kDlggwg_F8Dfpzw2wVAJ_53OOsSDXgDeVQ1S5hxj9GgbbMYdmHzh8uL8N-DvfPwk2445ilt4V-FfYBPOyduRey6pofnoJ0-iEyVN4nkRLm8Ool7UlxjYz6gQvQyz9ZeHyUoSYe0M_5yf8hvdbY1kfg"
+
 // POZOR: nepoškozuj poslední znak podpisu. U 64bajtového ES256 podpisu nese
 // poslední base64url znak jen 2 platné bity ze 6 — zbytek se při dekódování
 // zahodí, takže záměna 'A' za 'B' vrátí identické bajty a podpis pořád projde.
@@ -114,5 +131,26 @@ describe('verifyJwt', () => {
 
   it('u prázdného tokenu hlásí not-attempted', async () => {
     expect(await verifyJwt('', 'klic')).toBe(VERIFY.NOT_ATTEMPTED)
+  })
+
+  it('non-string klíč hlásí key-required', async () => {
+    expect(await verifyJwt(HS256_TOKEN, null)).toBe(VERIFY.KEY_REQUIRED)
+    expect(await verifyJwt(HS256_TOKEN, {})).toBe(VERIFY.KEY_REQUIRED)
+  })
+
+  it('tajemství se nesmí ořezávat — padded secret je jiný klíč', async () => {
+    expect(await verifyJwt(HS256_TOKEN, '  orchestrator-test-secret  ')).toBe(VERIFY.INVALID)
+  })
+
+  it('ověří platný RS256 podpis', async () => {
+    expect(await verifyJwt(RS256_TOKEN, RS256_PEM)).toBe(VERIFY.VERIFIED)
+  })
+
+  it('odmítne poškozený RS256 podpis', async () => {
+    expect(await verifyJwt(tamperSignature(RS256_TOKEN), RS256_PEM)).toBe(VERIFY.INVALID)
+  })
+
+  it('nepodporovaný algoritmus vrací unsupported, ne invalid', async () => {
+    expect(await verifyJwt(PS256_TOKEN, RS256_PEM)).toBe(VERIFY.UNSUPPORTED)
   })
 })
