@@ -5,6 +5,7 @@ import HistoryView from '../views/HistoryView.vue'
 import WorktreesView from '../views/WorktreesView.vue'
 import PrioritiesView from '../views/PrioritiesView.vue'
 import ReaderView from '../views/ReaderView.vue'
+import ToolsView from '../views/ToolsView.vue'
 
 const routes = [
   { path: '/', component: AgentsView },
@@ -13,6 +14,7 @@ const routes = [
   { path: '/history', component: HistoryView },
   { path: '/worktrees', component: WorktreesView },
   { path: '/reader', component: ReaderView },
+  { path: '/tools/:tool?', component: ToolsView },
 ]
 
 export default createRouter({

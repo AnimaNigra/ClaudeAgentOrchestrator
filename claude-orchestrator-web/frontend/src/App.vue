@@ -47,6 +47,13 @@
           >
             Reader
           </RouterLink>
+          <RouterLink
+            to="/tools/base64"
+            class="px-3 py-1 text-xs rounded transition-colors"
+            :class="$route.path.startsWith('/tools') ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-700'"
+          >
+            Tools
+          </RouterLink>
         </nav>
       </div>
       <div class="flex items-center gap-4 text-xs text-gray-400">
