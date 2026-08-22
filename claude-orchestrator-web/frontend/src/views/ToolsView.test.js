@@ -20,9 +20,13 @@ async function mountAt(path) {
 describe('ToolsView', () => {
   it('vykreslí odkaz na každý nástroj', async () => {
     const wrapper = await mountAt('/tools/base64')
-    const links = wrapper.findAll('aside a')
-    expect(links.length).toBeGreaterThanOrEqual(1)
-    expect(links.map(l => l.text())).toContain('Base64')
+    const labels = wrapper.findAll('aside a').map(l => l.text())
+    expect(labels).toEqual(['Base64', 'URL', 'HTML', 'Basic Auth'])
+  })
+
+  it('přepnutí slugu vymění panel', async () => {
+    const wrapper = await mountAt('/tools/basic-auth')
+    expect(wrapper.find('h2').text()).toBe('Basic Auth')
   })
 
   it('vybere nástroj podle parametru v route', async () => {
