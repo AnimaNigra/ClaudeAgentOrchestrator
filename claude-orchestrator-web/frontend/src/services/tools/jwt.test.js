@@ -40,4 +40,17 @@ describe('decodeJwt', () => {
     const token = 'eyJ0eXAiOiJKV1QifQ.eyJhIjoxfQ.x'
     expect(decodeJwt(token).value.algorithm).toBe('unknown')
   })
+
+  it('u non-string vstupu vrátí null místo pádu', () => {
+    expect(decodeJwt(123)).toEqual({ ok: true, value: null })
+    expect(decodeJwt({})).toEqual({ ok: true, value: null })
+    expect(decodeJwt(['x'])).toEqual({ ok: true, value: null })
+  })
+
+  it('odmítne nevalidní Base64URL kódování', () => {
+    expect(decodeJwt('a!b.eyJhIjoxfQ.x')).toEqual({
+      ok: false,
+      error: 'Invalid Base64URL encoding in token.',
+    })
+  })
 })

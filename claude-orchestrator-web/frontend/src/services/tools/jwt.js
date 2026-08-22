@@ -1,21 +1,15 @@
-const encoder = new TextEncoder()
-const decoder = new TextDecoder()
-
-function base64ToBytes(base64) {
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return bytes
-}
+import { encoder, decoder, base64ToBytes } from './bytes.js'
 
 // base64url -> base64: jiná abeceda a chybějící výplň.
 export function base64UrlToBytes(part) {
-  const base64 = part.replace(/-/g, '+').replace(/_/g, '/')
+  const part_str = typeof part === 'string' ? part : ''
+  const base64 = part_str.replace(/-/g, '+').replace(/_/g, '/')
   return base64ToBytes(base64 + '='.repeat((4 - (base64.length % 4)) % 4))
 }
 
 export function decodeJwt(token) {
-  const trimmed = (token ?? '').trim()
+  const token_str = typeof token === 'string' ? token : ''
+  const trimmed = token_str.trim()
   if (!trimmed) return { ok: true, value: null }
 
   const parts = trimmed.split('.')

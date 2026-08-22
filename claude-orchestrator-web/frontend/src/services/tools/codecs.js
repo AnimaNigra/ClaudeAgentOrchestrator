@@ -1,23 +1,7 @@
 // Čisté funkce pro textové kodeky. Nic tu nevyhazuje výjimku — chyby se vracejí
 // jako { ok: false, error }, aby je komponenta mohla vykreslit bez try/catch.
 
-const encoder = new TextEncoder()
-const decoder = new TextDecoder()
-
-// btoa/atob umí jen latin1, takže text musí přes UTF-8 bajty a binární řetězec.
-// Bez téhle oklikou by btoa('č') vyhodilo InvalidCharacterError.
-function bytesToBase64(bytes) {
-  let binary = ''
-  for (const byte of bytes) binary += String.fromCharCode(byte)
-  return btoa(binary)
-}
-
-function base64ToBytes(base64) {
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return bytes
-}
+import { encoder, decoder, bytesToBase64, base64ToBytes } from './bytes.js'
 
 export function encodeBase64(text) {
   if (!text) return { ok: true, value: '' }
