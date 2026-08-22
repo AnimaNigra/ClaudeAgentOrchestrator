@@ -1,8 +1,8 @@
+import { encoder } from './bytes.js'
+
 // SubtleCrypto umí jen tyhle čtyři. MD5 v seznamu chybí záměrně — WebCrypto ho
 // neimplementuje a doplnit by ho šlo jen vlastní implementací v JS.
 export const HASH_ALGORITHMS = ['SHA-1', 'SHA-256', 'SHA-384', 'SHA-512']
-
-const encoder = new TextEncoder()
 
 function toHex(bytes) {
   return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')

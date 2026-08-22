@@ -1,15 +1,15 @@
 import { encoder, decoder, base64ToBytes } from './bytes.js'
 
 // base64url -> base64: jiná abeceda a chybějící výplň.
-export function base64UrlToBytes(part) {
-  const part_str = typeof part === 'string' ? part : ''
-  const base64 = part_str.replace(/-/g, '+').replace(/_/g, '/')
+function base64UrlToBytes(part) {
+  const partStr = typeof part === 'string' ? part : ''
+  const base64 = partStr.replace(/-/g, '+').replace(/_/g, '/')
   return base64ToBytes(base64 + '='.repeat((4 - (base64.length % 4)) % 4))
 }
 
 export function decodeJwt(token) {
-  const token_str = typeof token === 'string' ? token : ''
-  const trimmed = token_str.trim()
+  const tokenStr = typeof token === 'string' ? token : ''
+  const trimmed = tokenStr.trim()
   if (!trimmed) return { ok: true, value: null }
 
   const parts = trimmed.split('.')
@@ -76,8 +76,8 @@ export async function verifyJwt(token, key) {
 
   const algorithm = decoded.value.algorithm
 
-  // Decide algorithm support before touching the signature, so out-of-table
-  // algorithms report UNSUPPORTED, not INVALID.
+  // Podpora algoritmu se rozhoduje dřív, než se sáhne na podpis, aby algoritmy
+  // mimo tabulky hlásily UNSUPPORTED, ne INVALID.
   if (!Object.hasOwn(HMAC_HASHES, algorithm) &&
       !Object.hasOwn(RSA_HASHES, algorithm) &&
       !Object.hasOwn(EC_PARAMS, algorithm)) {
@@ -121,8 +121,6 @@ export async function verifyJwt(token, key) {
       return await crypto.subtle.verify({ name: 'ECDSA', hash }, cryptoKey, signature, signed)
         ? VERIFY.VERIFIED : VERIFY.INVALID
     }
-
-    return VERIFY.UNSUPPORTED
   } catch {
     return VERIFY.INVALID
   }

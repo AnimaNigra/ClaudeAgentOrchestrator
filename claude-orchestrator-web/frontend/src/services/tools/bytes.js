@@ -1,5 +1,5 @@
-// btoa/atob are latin1-only, so every module moving text across a base64 boundary
-// needs UTF-8 byte conversion. One copy is easier to keep correct than three.
+// btoa/atob umí jen latin1, takže každý modul, který posílá text přes base64
+// hranici, potřebuje převod na UTF-8 bajty. Jedna kopie se udržuje snáz než tři.
 
 export const encoder = new TextEncoder()
 export const decoder = new TextDecoder()

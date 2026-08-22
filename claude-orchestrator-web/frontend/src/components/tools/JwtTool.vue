@@ -22,20 +22,26 @@
         <span :class="verificationClass">{{ verificationLabel }}</span>
       </div>
 
-      <p v-if="pemAsHmacSecret" class="text-xs text-amber-400">
-        Klíč vypadá jako PEM, ale token deklaruje algoritmus HMAC — token se ověřuje
-        proti textu PEM jako sdílenému tajemství, ne jako proti veřejnému klíči.
-      </p>
-
       <label class="flex flex-col gap-1">
         <span class="text-xs text-gray-500">Tajemství (HS*) nebo veřejný klíč v PEM (RS*, ES*)</span>
         <textarea
           v-model="key"
           rows="3"
           spellcheck="false"
+          autocomplete="off"
           class="w-full px-2 py-1 font-mono text-xs bg-gray-950 border border-gray-700 rounded text-gray-200 focus:outline-none focus:border-blue-500 resize-y"
         />
       </label>
+
+      <p v-if="pemAsHmacSecret" class="text-xs text-amber-400">
+        Klíč vypadá jako PEM, ale token deklaruje algoritmus HMAC — token se ověřuje
+        proti textu PEM jako sdílenému tajemství, ne jako proti veřejnému klíči.
+      </p>
+
+      <p v-if="keyWhitespaceWarning" class="text-xs text-amber-400">
+        Klíč má na okraji bílé znaky (např. nový řádek po vložení) — ověřují se
+        doslovně, zkus je odstranit.
+      </p>
 
       <div class="flex flex-col gap-1">
         <div class="flex items-center gap-2">
@@ -76,6 +82,7 @@ const decoded = computed(() => decodeJwt(token.value))
 let run = 0
 watchEffect(async () => {
   const current = ++run
+  verification.value = VERIFY.NOT_ATTEMPTED
   const state = await verifyJwt(token.value, key.value)
   if (current === run) verification.value = state
 })
@@ -86,6 +93,14 @@ watchEffect(async () => {
 const pemAsHmacSecret = computed(() =>
   decoded.value.ok && decoded.value.value?.algorithm?.startsWith('HS') &&
   key.value.includes('-----BEGIN'))
+
+// Klíč se schválně netrimuje (viz jwt.test.js), takže vložený klíč s okrajovou
+// bílou mezerou (typicky nový řádek z textarey) reálně selže. U HS* algoritmů
+// se to upozorní; u RS*/ES* by hlásilo i naprosto normální PEM, takže tam ne.
+const keyWhitespaceWarning = computed(() =>
+  verification.value === VERIFY.INVALID &&
+  decoded.value.ok && decoded.value.value?.algorithm?.startsWith('HS') &&
+  key.value !== key.value.trim())
 
 const LABELS = {
   [VERIFY.NOT_ATTEMPTED]: '',

@@ -29,8 +29,15 @@ describe('ToolsView', () => {
   })
 
   it('přepnutí slugu vymění panel', async () => {
-    const wrapper = await mountAt('/tools/basic-auth')
+    const router = makeRouter()
+    router.push('/tools/basic-auth')
+    await router.isReady()
+    const wrapper = mount(ToolsView, { global: { plugins: [router] } })
     expect(wrapper.find('h2').text()).toBe('Basic Auth')
+
+    await router.push('/tools/jwt')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('h2').text()).toBe('JWT')
   })
 
   it('vybere nástroj podle parametru v route', async () => {
@@ -51,6 +58,18 @@ describe('ToolsView', () => {
   it('URL nástroj se připojí s správným nadpisem', async () => {
     const wrapper = await mountAt('/tools/url')
     expect(wrapper.find('h2').text()).toBe('URL')
+  })
+
+  it('Base64 nástroj dekóduje vstup po přepnutí na Dekódovat', async () => {
+    const wrapper = await mountAt('/tools/base64')
+    const decodeButton = wrapper.findAll('button').find(b => b.text() === 'Dekódovat')
+    await decodeButton.trigger('click')
+
+    const textareas = wrapper.findAll('textarea')
+    await textareas[0].setValue('UMWZw61sacWhIMW+bHXFpW91xI1rw70ga8WvxYg=')
+    await wrapper.vm.$nextTick()
+    // Stejný vektor jako codecs.test.js — kulatý přes UTF-8 a diakritiku.
+    expect(textareas[1].element.value).toBe('Příliš žluťoučký kůň')
   })
 
   it('URL nástroj kóduje vstup', async () => {
@@ -134,6 +153,32 @@ describe('ToolsView', () => {
     await keyField.setValue('obycejne-tajemstvi')
     await flushPromises()
     expect(wrapper.text()).not.toContain('vypadá jako PEM')
+  })
+
+  it('JWT nástroj upozorní na okrajové bílé znaky v klíči jen když podpis neplatí', async () => {
+    const wrapper = await mountAt('/tools/jwt')
+    await wrapper.find('textarea').setValue(HS256_TOKEN)
+    await flushPromises()
+
+    const keyField = wrapper.findAll('textarea')[1]
+
+    // Správné tajemství s koncovým novým řádkem (typický výsledek vložení do
+    // textarey) — podpis se počítá z přesných bajtů, takže neplatí, a
+    // upozornění na bílé znaky se má zobrazit.
+    await keyField.setValue('orchestrator-test-secret\n')
+    await vi.waitFor(async () => {
+      await flushPromises()
+      expect(wrapper.text()).toContain('podpis neplatí')
+    })
+    expect(wrapper.text()).toContain('bílé znaky')
+
+    // Stejné tajemství bez nového řádku ověří a upozornění zmizí.
+    await keyField.setValue('orchestrator-test-secret')
+    await vi.waitFor(async () => {
+      await flushPromises()
+      expect(wrapper.text()).toContain('podpis platí')
+    })
+    expect(wrapper.text()).not.toContain('bílé znaky')
   })
 
   it('UUID nástroj vygeneruje požadovaný počet hodnot', async () => {

@@ -17,6 +17,7 @@
           v-model="password"
           :type="revealed ? 'text' : 'password'"
           spellcheck="false"
+          autocomplete="off"
           class="flex-1 px-2 py-1 font-mono text-xs bg-gray-950 border border-gray-700 rounded text-gray-200 focus:outline-none focus:border-blue-500"
         />
         <button
