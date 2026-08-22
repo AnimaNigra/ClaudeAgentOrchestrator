@@ -1,7 +1,9 @@
 <template>
-  <div class="flex flex-1 overflow-hidden">
-    <ToolsSidebar :tools="TOOLS" :active-slug="activeTool.slug" />
-    <component :is="activeTool.component" :key="activeTool.slug" />
+  <div class="relative flex flex-col flex-1 overflow-hidden">
+    <div class="flex flex-1 overflow-hidden">
+      <ToolsSidebar :tools="TOOLS" :active-slug="activeTool.slug" />
+      <component :is="activeTool.component" :key="activeTool.slug" />
+    </div>
   </div>
 </template>
 
