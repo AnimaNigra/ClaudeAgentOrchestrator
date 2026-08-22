@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, vi } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createWebHistory } from 'vue-router'
 import ToolsView from './ToolsView.vue'
+
+// Tentýž HS256 token a tajemství, proti kterým se testuje jwt.js.
+const HS256_TOKEN =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkphbiBOZW1lYyIsImlhdCI6MTUxNjIzOTAyMn0.keAAZPonJ3eodJzQoZTnC42n6QqyLCANJsfjUuqnUJ4'
 
 function makeRouter() {
   return createRouter({
@@ -21,7 +25,7 @@ describe('ToolsView', () => {
   it('vykreslí odkaz na každý nástroj', async () => {
     const wrapper = await mountAt('/tools/base64')
     const labels = wrapper.findAll('aside a').map(l => l.text())
-    expect(labels).toEqual(['Base64', 'URL', 'HTML', 'Basic Auth'])
+    expect(labels).toEqual(['Base64', 'URL', 'HTML', 'Basic Auth', 'JWT'])
   })
 
   it('přepnutí slugu vymění panel', async () => {
@@ -79,5 +83,56 @@ describe('ToolsView', () => {
     const codes = wrapper.findAll('code')
     expect(codes[0].text()).toBe('dXNlcjpwYXNz')
     expect(codes[1].text()).toBe('Authorization: Basic dXNlcjpwYXNz')
+  })
+
+  it('JWT nástroj dekóduje vložený token', async () => {
+    const wrapper = await mountAt('/tools/jwt')
+    expect(wrapper.find('h2').text()).toBe('JWT')
+
+    await wrapper.find('textarea').setValue(HS256_TOKEN)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('HS256')
+    expect(wrapper.text()).toContain('Jan Nemec')
+  })
+
+  it('JWT nástroj ověří podpis správným tajemstvím a odmítne špatné', async () => {
+    const wrapper = await mountAt('/tools/jwt')
+    await wrapper.find('textarea').setValue(HS256_TOKEN)
+    await flushPromises()
+
+    // Druhá textarea je pole pro klíč; objeví se až po úspěšném dekódování.
+    const keyField = wrapper.findAll('textarea')[1]
+    await keyField.setValue('orchestrator-test-secret')
+    // crypto.subtle.importKey/verify jsou skutečné asynchronní operace (běží
+    // mimo mikrotaskovou frontu), takže jedno flushPromises() je nespolehlivé
+    // — vi.waitFor opakuje kontrolu, dokud ověření doopravdy nedoběhne.
+    await vi.waitFor(async () => {
+      await flushPromises()
+      expect(wrapper.text()).toContain('podpis platí')
+    })
+
+    await keyField.setValue('spatne')
+    await vi.waitFor(async () => {
+      await flushPromises()
+      expect(wrapper.text()).toContain('podpis neplatí')
+    })
+  })
+
+  it('JWT nástroj upozorní, když HS token ověřuje proti PEM klíči', async () => {
+    const wrapper = await mountAt('/tools/jwt')
+    expect(wrapper.text()).toContain('SPKI')
+
+    await wrapper.find('textarea').setValue(HS256_TOKEN)
+    await flushPromises()
+
+    const keyField = wrapper.findAll('textarea')[1]
+    await keyField.setValue('-----BEGIN PUBLIC KEY-----\nMFw=\n-----END PUBLIC KEY-----')
+    await flushPromises()
+    expect(wrapper.text()).toContain('vypadá jako PEM')
+
+    await keyField.setValue('obycejne-tajemstvi')
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('vypadá jako PEM')
   })
 })

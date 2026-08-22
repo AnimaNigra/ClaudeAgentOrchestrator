@@ -13,6 +13,7 @@ import Base64Tool from '../components/tools/Base64Tool.vue'
 import UrlTool from '../components/tools/UrlTool.vue'
 import HtmlTool from '../components/tools/HtmlTool.vue'
 import BasicAuthTool from '../components/tools/BasicAuthTool.vue'
+import JwtTool from '../components/tools/JwtTool.vue'
 
 // Pořadí určuje pořadí v sidebaru. První položka je zároveň fallback
 // pro neznámý nebo chybějící slug v route.
@@ -21,6 +22,7 @@ const TOOLS = [
   { slug: 'url', label: 'URL', component: markRaw(UrlTool) },
   { slug: 'html', label: 'HTML', component: markRaw(HtmlTool) },
   { slug: 'basic-auth', label: 'Basic Auth', component: markRaw(BasicAuthTool) },
+  { slug: 'jwt', label: 'JWT', component: markRaw(JwtTool) },
 ]
 
 const route = useRoute()
