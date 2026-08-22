@@ -501,3 +501,5 @@ tmp/
 
 # Release build output (distributable zip is published via GitHub Releases, never committed)
 dist/
+# Subagent-driven development scratch workspace
+.superpowers/
