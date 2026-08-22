@@ -43,3 +43,78 @@ export function decodeJwt(token) {
     },
   }
 }
+
+export const VERIFY = {
+  NOT_ATTEMPTED: 'not-attempted',
+  KEY_REQUIRED: 'key-required',
+  VERIFIED: 'verified',
+  INVALID: 'invalid',
+  UNSUPPORTED: 'unsupported',
+}
+
+const HMAC_HASHES = { HS256: 'SHA-256', HS384: 'SHA-384', HS512: 'SHA-512' }
+const RSA_HASHES = { RS256: 'SHA-256', RS384: 'SHA-384', RS512: 'SHA-512' }
+const EC_PARAMS = {
+  ES256: { namedCurve: 'P-256', hash: 'SHA-256' },
+  ES384: { namedCurve: 'P-384', hash: 'SHA-384' },
+  ES512: { namedCurve: 'P-521', hash: 'SHA-512' },
+}
+
+// PEM je jen base64 mezi hlavičkou a patičkou. Převod na bajty dělá sdílený
+// helper z bytes.js — tenhle soubor už ho používá pro base64UrlToBytes.
+function pemToBytes(pem) {
+  const body = pem.replace(/-----(BEGIN|END)[^-]*-----/g, '').replace(/\s+/g, '')
+  return base64ToBytes(body)
+}
+
+export async function verifyJwt(token, key) {
+  const decoded = decodeJwt(token)
+  if (!decoded.ok || !decoded.value) return VERIFY.NOT_ATTEMPTED
+
+  const secret = (key ?? '').trim()
+  if (!secret) return VERIFY.KEY_REQUIRED
+
+  const algorithm = decoded.value.algorithm
+  const parts = token.trim().split('.')
+  const signed = encoder.encode(`${parts[0]}.${parts[1]}`)
+
+  let signature
+  try {
+    signature = base64UrlToBytes(parts[2])
+  } catch {
+    return VERIFY.INVALID
+  }
+
+  // Cokoliv se uvnitř pokazí — vadný PEM, špatná křivka, nesouhlasná délka —
+  // je pro uživatele "podpis neplatí", ne stack trace.
+  try {
+    if (HMAC_HASHES[algorithm]) {
+      const cryptoKey = await crypto.subtle.importKey(
+        'raw', encoder.encode(secret),
+        { name: 'HMAC', hash: HMAC_HASHES[algorithm] }, false, ['verify'])
+      return await crypto.subtle.verify('HMAC', cryptoKey, signature, signed)
+        ? VERIFY.VERIFIED : VERIFY.INVALID
+    }
+
+    if (RSA_HASHES[algorithm]) {
+      const cryptoKey = await crypto.subtle.importKey(
+        'spki', pemToBytes(secret),
+        { name: 'RSASSA-PKCS1-v1_5', hash: RSA_HASHES[algorithm] }, false, ['verify'])
+      return await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, signature, signed)
+        ? VERIFY.VERIFIED : VERIFY.INVALID
+    }
+
+    if (EC_PARAMS[algorithm]) {
+      const { namedCurve, hash } = EC_PARAMS[algorithm]
+      const cryptoKey = await crypto.subtle.importKey(
+        'spki', pemToBytes(secret),
+        { name: 'ECDSA', namedCurve }, false, ['verify'])
+      return await crypto.subtle.verify({ name: 'ECDSA', hash }, cryptoKey, signature, signed)
+        ? VERIFY.VERIFIED : VERIFY.INVALID
+    }
+
+    return VERIFY.UNSUPPORTED
+  } catch {
+    return VERIFY.INVALID
+  }
+}
