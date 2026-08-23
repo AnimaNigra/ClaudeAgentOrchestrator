@@ -33,7 +33,9 @@ function formatSize(bytes) {
   const units = ['kB', 'MB', 'GB']
   let value = bytes / 1000
   let unit = 0
-  while (value >= 1000 && unit < units.length - 1) {
+  // Prahem je 999.95, ne 1000: toFixed(1) zaokrouhluje nahoru, takže by se
+  // jinak vypsalo "1000,0 kB" místo "1,0 MB".
+  while (value >= 999.95 && unit < units.length - 1) {
     value /= 1000
     unit++
   }

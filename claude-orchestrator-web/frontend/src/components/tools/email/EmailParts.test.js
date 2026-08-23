@@ -16,8 +16,8 @@ const EMAIL = {
   htmlBodySanitized: '<p>ahoj</p>',
   unresolvedInlineImages: 0,
   attachments: [
-    { index: 0, fileName: 'pozn.txt', contentType: 'text/plain', sizeBytes: 13 },
-    { index: 1, fileName: 'logo.png', contentType: 'image/png', sizeBytes: 2048 },
+    { index: 5, fileName: 'pozn.txt', contentType: 'text/plain', sizeBytes: 13 },
+    { index: 2, fileName: 'logo.png', contentType: 'image/png', sizeBytes: 2048 },
   ],
   headers: [
     { name: 'Subject', value: '=?utf-8?B?…?=' },
@@ -47,6 +47,22 @@ describe('EmailHeaders', () => {
     expect(w.findAll('details tbody tr')).toHaveLength(2)
     expect(w.text()).toContain('X-Mailer')
     expect(w.text()).toContain('Outlook')
+  })
+
+  it('naformátuje datum podle českého locale', () => {
+    const w = mount(EmailHeaders, { props: { email: EMAIL } })
+    // Fixtura má 2026-08-23T10:00:00+02:00. Neporovnává se celý řetězec —
+    // toLocaleString se mezi verzemi ICU liší v mezerách a tečkách — ale rok,
+    // měsíc i den tam být musí, a nesmí to být syrové ISO.
+    const text = w.text()
+    expect(text).toContain('2026')
+    expect(text).toMatch(/8\.\s*|srpna/)
+    expect(text).not.toContain('2026-08-23T10:00:00')
+  })
+
+  it('nečitelné datum vypíše tak, jak přišlo', () => {
+    const w = mount(EmailHeaders, { props: { email: { ...EMAIL, date: 'tohle není datum' } } })
+    expect(w.text()).toContain('tohle není datum')
   })
 })
 
@@ -111,10 +127,26 @@ describe('EmailAttachments', () => {
     expect(w.text()).toContain('2,0 kB')
   })
 
-  it('emituje download s indexem přílohy', async () => {
+  it('emituje download s indexem přílohy, ne s pořadím v seznamu', async () => {
     const w = mount(EmailAttachments, { props: { attachments: EMAIL.attachments } })
+    // Druhý řádek má index 2. Kdyby komponenta posílala pozici v poli,
+    // přišla by 1 a tenhle test spadne — o to jde.
     await w.findAll('button')[1].trigger('click')
-    expect(w.emitted('download')).toEqual([[1]])
+    expect(w.emitted('download')).toEqual([[2]])
+  })
+
+  it('u hranice mezi jednotkami zvolí správnou jednotku', () => {
+    const w = mount(EmailAttachments, {
+      props: {
+        attachments: [
+          { index: 0, fileName: 'a.bin', contentType: 'application/octet-stream', sizeBytes: 999_960 },
+          { index: 1, fileName: 'b.bin', contentType: 'application/octet-stream', sizeBytes: 999_000 },
+        ],
+      },
+    })
+    expect(w.text()).toContain('1,0 MB')
+    expect(w.text()).not.toContain('1000,0 kB')
+    expect(w.text()).toContain('999,0 kB')
   })
 
   it('bez příloh se nevykreslí vůbec', () => {
