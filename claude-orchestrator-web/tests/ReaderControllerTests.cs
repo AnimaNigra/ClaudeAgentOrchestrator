@@ -95,4 +95,32 @@ public class ReaderControllerTests : IDisposable
     {
         Assert.IsType<NotFoundObjectResult>(_ctrl.GetRaw(Path.Combine(_dir, "neni.png")));
     }
+
+    private static string ErrorOf(IActionResult result)
+    {
+        var value = Assert.IsAssignableFrom<ObjectResult>(result).Value!;
+        return (string)value.GetType().GetProperty("error")!.GetValue(value)!;
+    }
+
+    [Fact]
+    public void GetContent_PrazdnaCesta_VraciAnglickouHlasku()
+    {
+        // Reader má anglické UI a hlášku zobrazuje přes alert(), takže se do ní
+        // nesmí dostat česká zpráva ze sdílené validace.
+        Assert.Equal("Invalid path", ErrorOf(_ctrl.GetContent("")));
+    }
+
+    [Fact]
+    public void GetContent_Traversal_VraciAnglickouHlasku()
+    {
+        var p = Path.Combine(_dir, "sub", "..", "a.md");
+        Assert.Equal("Path must not contain '..' segments", ErrorOf(_ctrl.GetContent(p)));
+    }
+
+    [Fact]
+    public void GetContent_NepodporovanaPripona_VraciAnglickouHlasku()
+    {
+        var p = Write("a.exe", "x");
+        Assert.Equal("Unsupported extension", ErrorOf(_ctrl.GetContent(p)));
+    }
 }

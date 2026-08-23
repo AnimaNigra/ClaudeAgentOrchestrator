@@ -24,9 +24,10 @@ public class ReaderController : ControllerBase
         { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg" };
 
     /// <summary>
-    /// Převede výsledek sdílené validace na HTTP odpověď. Tvar těla
-    /// (`error`, u přípony i `allowed`) zůstává stejný jako před sjednocením
-    /// validace — frontend na něj spoléhá.
+    /// Převede výsledek sdílené validace na HTTP odpověď. Reader má anglické UI,
+    /// takže se sem NEPROPOUŠTÍ české `Message` z LocalFilePath — ty jsou pro
+    /// česky psaný prohlížeč e-mailů. Tvar těla (`error`, u přípony i `allowed`)
+    /// zůstává stejný jako před sjednocením validace; frontend na něj spoléhá.
     /// </summary>
     private IActionResult? Reject(LocalFilePathResult result, IReadOnlyCollection<string> allowed)
     {
@@ -37,7 +38,11 @@ public class ReaderController : ControllerBase
                 NotFound(new { error = "File not found", path = result.FullPath }),
             PathError.UnsupportedExtension =>
                 BadRequest(new { error = "Unsupported extension", allowed = allowed.ToArray() }),
-            _ => BadRequest(new { error = result.Message ?? "Invalid path" }),
+            PathError.Traversal =>
+                BadRequest(new { error = "Path must not contain '..' segments" }),
+            PathError.TooLarge =>
+                BadRequest(new { error = "File too large" }),
+            _ => BadRequest(new { error = "Invalid path" }),
         };
     }
 
