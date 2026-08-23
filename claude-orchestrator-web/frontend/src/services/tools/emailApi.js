@@ -41,12 +41,16 @@ export async function fetchAttachment(source, index) {
 export function saveBlob(blob, fileName) {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = fileName
-  document.body.appendChild(anchor)
-  anchor.click()
-  anchor.remove()
-  // Odvolání se odkládá — některé prohlížeče stahování zruší, když se URL
-  // uvolní ve stejném tiku, ve kterém se na odkaz kliklo.
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  try {
+    anchor.href = url
+    anchor.download = fileName
+    document.body.appendChild(anchor)
+    anchor.click()
+  } finally {
+    anchor.remove()
+    // Odvolání se odkládá — některé prohlížeče stahování zruší, když se URL
+    // uvolní ve stejném tiku, ve kterém se na odkaz kliklo. Je ve finally,
+    // aby úklid proběhl i kdyby něco nad ním selhalo.
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
 }
