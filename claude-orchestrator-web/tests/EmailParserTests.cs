@@ -403,6 +403,100 @@ public class EmailParserTests
         Assert.Equal(EmailParser.Format.Eml, EmailParser.SniffFormat(s));
     }
 
+    /// <summary>Gitignorovaná lokální fixtura. Když chybí, testy .msg se
+    /// přeskočí — v souhrnu dotnet test je pak vidět `Skipped: N`, takže se to
+    /// nedá splést s pokrytím, které neexistuje.</summary>
+    private static string FixturePath =>
+        Path.Combine(AppContext.BaseDirectory, "fixtures-local", "sample.msg");
+
+    private static Stream OpenFixture()
+    {
+        Skip.IfNot(File.Exists(FixturePath),
+            $"Lokální .msg fixtura chybí ({FixturePath}). Zkopíruj reálný .msg do " +
+            "claude-orchestrator-web/tests/fixtures-local/sample.msg — do gitu se nedostane.");
+        return File.OpenRead(FixturePath);
+    }
+
+    [SkippableFact]
+    public void MsgFixtura_JeRozpoznanaJakoMsg()
+    {
+        using var s = OpenFixture();
+        Assert.Equal(EmailParser.Format.Msg, EmailParser.SniffFormat(s));
+    }
+
+    [SkippableFact]
+    public void MsgFixtura_MaOdesilatelePredmetAPrijemce()
+    {
+        using var s = OpenFixture();
+        var e = EmailParser.Parse(s);
+        Assert.NotEmpty(e.From);
+        Assert.NotEmpty(e.Subject);
+        Assert.NotEmpty(e.To);
+        Assert.NotNull(e.Date);
+    }
+
+    [SkippableFact]
+    public void MsgFixtura_MaTelo()
+    {
+        using var s = OpenFixture();
+        var e = EmailParser.Parse(s);
+        Assert.True(!string.IsNullOrWhiteSpace(e.TextBody) ||
+                    !string.IsNullOrWhiteSpace(e.HtmlBodySanitized),
+                    "Fixtura nemá ani textové, ani HTML tělo — vyber jinou.");
+    }
+
+    [SkippableFact]
+    public void MsgFixtura_MaHlavicky()
+    {
+        using var s = OpenFixture();
+        Assert.NotEmpty(EmailParser.Parse(s).Headers);
+    }
+
+    [SkippableFact]
+    public void MsgFixtura_PrilohaJdeStahnoutAOdpovidaVypisu()
+    {
+        using var s = OpenFixture();
+        var e = EmailParser.Parse(s);
+        Assert.NotEmpty(e.Attachments);
+
+        var first = e.Attachments[0];
+        s.Position = 0;
+        var (bytes, name, ctype) =
+            EmailParser.ExtractAttachmentBytes(s, EmailParser.Format.Msg, 0);
+        Assert.Equal(first.FileName, name);
+        Assert.Equal(first.ContentType, ctype);
+        Assert.Equal(first.SizeBytes, bytes.LongLength);
+    }
+
+    [SkippableFact]
+    public void MsgFixtura_PrilohaMimoRozsah_HodiIndexOutOfRange()
+    {
+        using var s = OpenFixture();
+        Assert.Throws<IndexOutOfRangeException>(() =>
+            EmailParser.ExtractAttachmentBytes(s, EmailParser.Format.Msg, 999));
+    }
+
+    [SkippableFact]
+    public void MsgFixtura_SanitizovaneHtmlNeobsahujeScript()
+    {
+        using var s = OpenFixture();
+        var e = EmailParser.Parse(s);
+        Skip.If(e.HtmlBodySanitized is null, "Fixtura nemá HTML tělo.");
+        Assert.DoesNotContain("<script", e.HtmlBodySanitized, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [SkippableFact]
+    public void MsgFixtura_InlineObrazekSePrepiseNaDataUrl()
+    {
+        // Tohle je hlavní důvod, proč se .msg testuje na reálném souboru:
+        // oprava z §6.2 se na .msg větvi jinak nikdy nespustí.
+        using var s = OpenFixture();
+        var e = EmailParser.Parse(s);
+        Skip.If(e.HtmlBodySanitized is null, "Fixtura nemá HTML tělo.");
+        Assert.Contains("data:", e.HtmlBodySanitized);
+        Assert.DoesNotContain("cid:", e.HtmlBodySanitized);
+    }
+
     private sealed class NonSeekableStream : MemoryStream
     {
         public override bool CanSeek => false;
