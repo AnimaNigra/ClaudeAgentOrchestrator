@@ -55,18 +55,29 @@ const loading = ref(false)
 // požadavky nic neukládá (spec §4.1).
 let source = null
 
+// Počítadlo běhů. Tlačítko "Otevřít" se sice při načítání zamyká, ale přetažení
+// souboru ani výběr přes dialog ne, takže se dvě načtení můžou překrýt. Bez
+// tohohle by starší odpověď, která doběhne později, přepsala tu novější.
+let run = 0
+
 async function load(next) {
+  const current = ++run
   loading.value = true
   error.value = ''
   try {
-    email.value = await parseEmail(next)
+    const parsed = await parseEmail(next)
+    if (current !== run) return
+    email.value = parsed
     source = next
   } catch (e) {
+    if (current !== run) return
     error.value = e.message
     email.value = null
     source = null
   } finally {
-    loading.value = false
+    // Jen aktuální běh smí zhasnout indikátor — jinak by zmizel, i když
+    // novější požadavek pořád běží.
+    if (current === run) loading.value = false
   }
 }
 
@@ -88,11 +99,14 @@ function onPick(event) {
 async function download(index) {
   if (!source) return
   error.value = ''
+  // Příloha i zdroj se čtou PŘED awaitem. Kdyby se mezitím načetla jiná zpráva,
+  // email.value už ukazuje na ni — příloha by se uložila pod cizím jménem, nebo
+  // by find() vrátil undefined a .fileName by spadlo syrovou chybou.
+  const attachment = email.value?.attachments.find(a => a.index === index)
+  if (!attachment) return
+  const downloadSource = source
   try {
-    const blob = await fetchAttachment(source, index)
-    // Hledá se podle `index`, ne podle pozice v poli — server přiděluje indexy
-    // a nic neslibuje, že budou souvislé.
-    const attachment = email.value.attachments.find(a => a.index === index)
+    const blob = await fetchAttachment(downloadSource, index)
     saveBlob(blob, attachment.fileName)
   } catch (e) {
     // Zprávu držíme dál — selhalo stahování přílohy, ne načtení zprávy.

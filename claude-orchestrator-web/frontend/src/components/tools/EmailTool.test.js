@@ -148,4 +148,51 @@ describe('EmailTool', () => {
 
     expect(emailApi.parseEmail).toHaveBeenCalledWith({ file })
   })
+
+  it('starší načtení nepřepíše novější, i když doběhne později', async () => {
+    let resolveStarsi
+    emailApi.parseEmail
+      .mockImplementationOnce(() => new Promise(r => { resolveStarsi = () => r({ ...EMAIL, subject: 'STARSI' }) }))
+      .mockResolvedValueOnce({ ...EMAIL, subject: 'NOVEJSI' })
+
+    const w = mount(EmailTool)
+    await pathInput(w).setValue('C:\\a.eml')
+    w.find('form').trigger('submit')
+
+    const file = new File(['obsah'], 'b.eml')
+    await w.find('section').trigger('drop', { dataTransfer: { files: [file] } })
+    await flushPromises()
+    expect(w.text()).toContain('NOVEJSI')
+
+    resolveStarsi()
+    await flushPromises()
+    expect(w.text()).toContain('NOVEJSI')
+    expect(w.text()).not.toContain('STARSI')
+  })
+
+  it('stahování uloží přílohu pod jménem ze zprávy, ze které se spustilo', async () => {
+    emailApi.parseEmail.mockResolvedValue(EMAIL)
+    let resolveBlob
+    const blob = new Blob(['data'])
+    emailApi.fetchAttachment.mockImplementationOnce(
+      () => new Promise(r => { resolveBlob = () => r(blob) }))
+
+    const w = mount(EmailTool)
+    await pathInput(w).setValue('C:\\a.eml')
+    await w.find('form').trigger('submit')
+    await flushPromises()
+
+    w.findAll('button').find(b => b.text() === 'Stáhnout').trigger('click')
+
+    // Mezitím se načte jiná zpráva, která žádnou přílohu nemá.
+    emailApi.parseEmail.mockResolvedValueOnce({ ...EMAIL, subject: 'Jina', attachments: [] })
+    await pathInput(w).setValue('C:\\b.eml')
+    await w.find('form').trigger('submit')
+    await flushPromises()
+
+    resolveBlob()
+    await flushPromises()
+
+    expect(emailApi.saveBlob).toHaveBeenCalledWith(blob, 'pozn.txt')
+  })
 })
