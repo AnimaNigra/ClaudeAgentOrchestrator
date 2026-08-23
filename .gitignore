@@ -503,3 +503,8 @@ tmp/
 dist/
 # Subagent-driven development scratch workspace
 .superpowers/
+
+# Reálné .msg fixtury pro prohlížeč e-mailů. Jsou to skutečné pracovní zprávy
+# se jmény a adresami třetích osob — do repozitáře nepatří. Testy je přeskočí,
+# když chybí.
+claude-orchestrator-web/tests/fixtures-local/
