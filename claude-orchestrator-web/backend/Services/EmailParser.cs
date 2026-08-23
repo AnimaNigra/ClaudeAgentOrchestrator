@@ -2,6 +2,8 @@ using AngleSharp.Html.Dom;
 using ClaudeOrchestrator.Models;
 using Ganss.Xss;
 using MimeKit;
+using System.Text;
+using MsgStorage = MsgReader.Outlook.Storage;
 
 namespace ClaudeOrchestrator.Services;
 
@@ -11,6 +13,35 @@ namespace ClaudeOrchestrator.Services;
 /// </summary>
 public static class EmailParser
 {
+    public enum Format { Eml, Msg }
+
+    static EmailParser()
+    {
+        // .NET Core nevozí legacy kódové stránky. Reálné .msg z českého Outlooku
+        // deklarují ISO-8859-2 (28592) a MsgReader na nich bez tohohle spadne
+        // s NotSupportedException už při načítání příloh — naměřeno na skutečné
+        // zprávě, viz Odchylka 1. Registrace patří sem, ne do Program.cs, aby
+        // parser fungoval i v testech.
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+    }
+
+    /// <summary>Čte první čtyři bajty (D0 CF 11 E0 = OLE compound file, tedy .msg)
+    /// a vrátí pozici streamu tam, kde byla — volající z něj čte hned potom.</summary>
+    public static Format SniffFormat(Stream stream)
+    {
+        if (!stream.CanSeek) throw new ArgumentException("Stream must be seekable.", nameof(stream));
+        Span<byte> head = stackalloc byte[4];
+        var origin = stream.Position;
+        var read = stream.Read(head);
+        stream.Position = origin;
+        return read == 4 && head[0] == 0xD0 && head[1] == 0xCF && head[2] == 0x11 && head[3] == 0xE0
+            ? Format.Msg
+            : Format.Eml;
+    }
+
+    public static ParsedEmail Parse(Stream stream) =>
+        SniffFormat(stream) == Format.Msg ? ParseMsg(stream) : ParseEml(stream);
+
     public static ParsedEmail ParseEml(Stream stream)
     {
         var msg = MimeMessage.Load(stream);
@@ -127,5 +158,95 @@ public static class EmailParser
         };
 
         return (sanitizer.Sanitize(rawHtml), unresolved);
+    }
+
+    public static ParsedEmail ParseMsg(Stream stream)
+    {
+        using var msg = new MsgStorage.Message(stream);
+
+        var headers = new List<HeaderEntry>();
+        if (msg.Headers?.RawHeaders is { } rawHeaders)
+            foreach (string key in rawHeaders)
+                headers.Add(new HeaderEntry(key, rawHeaders[key] ?? ""));
+
+        var inline = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var attachments = new List<AttachmentInfo>();
+        var idx = 0;
+        foreach (var a in msg.Attachments.OfType<MsgStorage.Attachment>())
+        {
+            var name = !string.IsNullOrEmpty(a.FileName) ? a.FileName : $"attachment-{idx}";
+            var ctype = !string.IsNullOrEmpty(a.MimeType) ? a.MimeType : "application/octet-stream";
+            if (!string.IsNullOrEmpty(a.ContentId) && a.Data is not null)
+                inline[a.ContentId] = $"data:{ctype};base64,{Convert.ToBase64String(a.Data)}";
+            attachments.Add(new AttachmentInfo(idx, name, ctype, a.Data?.LongLength ?? 0L));
+            idx++;
+        }
+
+        var htmlRaw = msg.BodyHtml;
+        var (htmlSan, unresolved) = SanitizeHtml(htmlRaw, inline);
+
+        return new ParsedEmail(
+            From: FormatMsgAddress(msg.Sender?.DisplayName, msg.Sender?.Email),
+            To: msg.Recipients.Where(r => r.Type == MsgReader.Outlook.RecipientType.To)
+                              .Select(r => FormatMsgAddress(r.DisplayName, r.Email)).ToList(),
+            Cc: msg.Recipients.Where(r => r.Type == MsgReader.Outlook.RecipientType.Cc)
+                              .Select(r => FormatMsgAddress(r.DisplayName, r.Email)).ToList(),
+            Bcc: msg.Recipients.Where(r => r.Type == MsgReader.Outlook.RecipientType.Bcc)
+                               .Select(r => FormatMsgAddress(r.DisplayName, r.Email)).ToList(),
+            Subject: msg.Subject ?? "",
+            Date: msg.SentOn,
+            TextBody: msg.BodyText,
+            HtmlBodyRaw: htmlRaw,
+            HtmlBodySanitized: htmlSan,
+            UnresolvedInlineImages: unresolved,
+            Attachments: attachments,
+            Headers: headers);
+    }
+
+    private static string FormatMsgAddress(string? name, string? email)
+    {
+        if (string.IsNullOrEmpty(email)) return name ?? "";
+        if (string.IsNullOrEmpty(name) || name == email) return email;
+        return $"{name} <{email}>";
+    }
+
+    /// <summary>Znovu naparsuje zdroj a vytáhne N-tou přílohu. Bezstavové
+    /// záměrně — server si mezi požadavky nic nedrží (spec §4.1).</summary>
+    public static (byte[] Bytes, string FileName, string ContentType) ExtractAttachmentBytes(
+        Stream stream, Format format, int index) => format switch
+    {
+        Format.Eml => ExtractEmlAttachment(stream, index),
+        Format.Msg => ExtractMsgAttachment(stream, index),
+        _ => throw new ArgumentOutOfRangeException(nameof(format))
+    };
+
+    private static (byte[] Bytes, string FileName, string ContentType) ExtractEmlAttachment(
+        Stream stream, int index)
+    {
+        var msg = MimeMessage.Load(stream);
+        var parts = EnumerateEmlAttachmentParts(msg).ToList();
+        if (index < 0 || index >= parts.Count)
+            throw new IndexOutOfRangeException($"Attachment index {index} out of range (0..{parts.Count - 1}).");
+        var part = parts[index];
+        using var ms = new MemoryStream();
+        // Stejný důvod jako v MeasureMimePart: prázdné tělo znamená Content == null,
+        // ne chybu. Stáhne se prázdný soubor místo pádu s NullReferenceException.
+        part.Content?.DecodeTo(ms);
+        return (ms.ToArray(),
+                part.FileName ?? part.ContentDisposition?.FileName ?? $"attachment-{index}",
+                part.ContentType?.MimeType ?? "application/octet-stream");
+    }
+
+    private static (byte[] Bytes, string FileName, string ContentType) ExtractMsgAttachment(
+        Stream stream, int index)
+    {
+        using var msg = new MsgStorage.Message(stream);
+        var all = msg.Attachments.OfType<MsgStorage.Attachment>().ToList();
+        if (index < 0 || index >= all.Count)
+            throw new IndexOutOfRangeException($"Attachment index {index} out of range (0..{all.Count - 1}).");
+        var a = all[index];
+        return (a.Data ?? Array.Empty<byte>(),
+                !string.IsNullOrEmpty(a.FileName) ? a.FileName : $"attachment-{index}",
+                !string.IsNullOrEmpty(a.MimeType) ? a.MimeType : "application/octet-stream");
     }
 }

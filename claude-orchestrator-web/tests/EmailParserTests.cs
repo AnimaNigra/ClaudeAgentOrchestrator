@@ -301,4 +301,96 @@ public class EmailParserTests
         Assert.Equal(0, e.UnresolvedInlineImages);
         Assert.Contains("data:image/png;base64,iVBORw0KGgo=", e.HtmlBodySanitized);
     }
+
+    [Fact]
+    public void Sniff_MagickeBajty_ZnamenajiMsg()
+    {
+        var msg = new MemoryStream(new byte[] { 0xD0, 0xCF, 0x11, 0xE0, 0x00, 0x01 });
+        Assert.Equal(EmailParser.Format.Msg, EmailParser.SniffFormat(msg));
+    }
+
+    [Fact]
+    public void Sniff_Text_ZnamenaEml()
+    {
+        Assert.Equal(EmailParser.Format.Eml, EmailParser.SniffFormat(S(Prosty)));
+    }
+
+    [Fact]
+    public void Sniff_KratsiNezCtyriBajty_ZnamenaEml()
+    {
+        var kratky = new MemoryStream(new byte[] { 0xD0 });
+        Assert.Equal(EmailParser.Format.Eml, EmailParser.SniffFormat(kratky));
+    }
+
+    [Fact]
+    public void Sniff_PosunePoziciZpatky()
+    {
+        // Parser čte ze stejného streamu hned po rozpoznání, takže SniffFormat
+        // ho nesmí nechat posunutý — jinak přijde o první čtyři bajty.
+        var s = S(Prosty);
+        s.Position = 0;
+        EmailParser.SniffFormat(s);
+        Assert.Equal(0, s.Position);
+        Assert.Equal("Příliš žluťoučký", EmailParser.ParseEml(s).Subject);
+    }
+
+    [Fact]
+    public void Sniff_NeseekovatelnyStream_HodiArgumentException()
+    {
+        Assert.Throws<ArgumentException>(() => EmailParser.SniffFormat(new NonSeekableStream()));
+    }
+
+    [Fact]
+    public void Parse_DelegujePodleFormatu()
+    {
+        Assert.Equal("Příliš žluťoučký", EmailParser.Parse(S(Prosty)).Subject);
+    }
+
+    [Fact]
+    public void ExtractAttachment_VratiSpravneBajtyJmenoATyp()
+    {
+        var (bytes, name, ctype) =
+            EmailParser.ExtractAttachmentBytes(S(Related), EmailParser.Format.Eml, 0);
+        Assert.Equal("pozn.txt", name);
+        Assert.Equal("text/plain", ctype);
+        Assert.Equal("obsah prilohy", Encoding.UTF8.GetString(bytes).Trim());
+    }
+
+    [Fact]
+    public void ExtractAttachment_UmiIInlineCast()
+    {
+        // Index 1 je inline logo.png — musí jít stáhnout jako každá jiná příloha.
+        var (bytes, name, ctype) =
+            EmailParser.ExtractAttachmentBytes(S(Related), EmailParser.Format.Eml, 1);
+        Assert.Equal("logo.png", name);
+        Assert.Equal("image/png", ctype);
+        Assert.Equal(8, bytes.Length);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(2)]
+    [InlineData(99)]
+    public void ExtractAttachment_MimoRozsah_HodiIndexOutOfRange(int index)
+    {
+        Assert.Throws<IndexOutOfRangeException>(() =>
+            EmailParser.ExtractAttachmentBytes(S(Related), EmailParser.Format.Eml, index));
+    }
+
+    [Fact]
+    public void EmailParser_ZpristupniLegacyKodoveStranky()
+    {
+        // Dotknutím se typu se spustí jeho statický konstruktor.
+        EmailParser.SniffFormat(new MemoryStream(new byte[4]));
+
+        // ISO-8859-2 (Latin-2). Reálné .msg z českého Outlooku ji deklarují
+        // a MsgReader na nich bez registrace poskytovatele spadne
+        // s NotSupportedException už při načítání příloh — naměřeno.
+        Assert.Equal("iso-8859-2", Encoding.GetEncoding(28592).WebName);
+    }
+
+    private sealed class NonSeekableStream : MemoryStream
+    {
+        public override bool CanSeek => false;
+    }
 }
