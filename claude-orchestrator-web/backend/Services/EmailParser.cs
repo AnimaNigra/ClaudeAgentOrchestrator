@@ -50,8 +50,12 @@ public static class EmailParser
 
     private static long MeasureMimePart(MimePart part)
     {
+        // Content je null u části s prázdným tělem i u streamu useknutého
+        // uprostřed části — MimeMessage.Load ani u jednoho nevyhodí chybu,
+        // takže se to sem dostane jako platná zpráva.
+        if (part.Content is null) return 0;
         using var ms = new MemoryStream();
-        part.Content!.DecodeTo(ms);
+        part.Content.DecodeTo(ms);
         return ms.Length;
     }
 
@@ -72,9 +76,12 @@ public static class EmailParser
         foreach (var part in msg.BodyParts.OfType<MimePart>())
         {
             if (string.IsNullOrEmpty(part.ContentId)) continue;
+            // Bez těla není co dosadit — část se do mapy nedostane a její cid:
+            // se tím pádem započítá jako nerozřešené, což je správné chování.
+            if (part.Content is null) continue;
             var ctype = part.ContentType?.MimeType ?? "application/octet-stream";
             using var ms = new MemoryStream();
-            part.Content!.DecodeTo(ms);
+            part.Content.DecodeTo(ms);
             map[part.ContentId] = $"data:{ctype};base64,{Convert.ToBase64String(ms.ToArray())}";
         }
         return map;

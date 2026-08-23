@@ -210,4 +210,95 @@ public class EmailParserTests
         Assert.Null(html);
         Assert.Equal(0, unresolved);
     }
+
+    private const string PrazdnaPriloha = """
+        From: a@example.cz
+        To: b@example.cz
+        Subject: Prazdna priloha
+        MIME-Version: 1.0
+        Content-Type: multipart/mixed; boundary="MIX"
+
+        --MIX
+        Content-Type: text/plain; charset=utf-8
+
+        telo
+        --MIX
+        Content-Type: application/octet-stream
+        Content-Disposition: attachment; filename="prazdny.bin"
+
+        --MIX--
+
+        """;
+
+    private const string PrazdnyInline = """
+        From: a@example.cz
+        To: b@example.cz
+        Subject: Prazdny inline
+        MIME-Version: 1.0
+        Content-Type: multipart/related; boundary="REL"
+
+        --REL
+        Content-Type: text/html; charset=utf-8
+
+        <img src="cid:logo">
+        --REL
+        Content-Type: image/png
+        Content-ID: <logo>
+        Content-Disposition: inline; filename="logo.png"
+
+        --REL--
+
+        """;
+
+    // Content-ID velkými písmeny proti malému cid: v těle — kód tvrdí, že to
+    // porovnává bez ohledu na velikost, ale žádná fixtura to nezkoušela.
+    private const string CidJinaVelikostPismen = """
+        From: a@example.cz
+        To: b@example.cz
+        Subject: Velikost pismen
+        MIME-Version: 1.0
+        Content-Type: multipart/related; boundary="REL"
+
+        --REL
+        Content-Type: text/html; charset=utf-8
+
+        <img src="cid:logo123">
+        --REL
+        Content-Type: image/png
+        Content-ID: <LOGO123>
+        Content-Transfer-Encoding: base64
+        Content-Disposition: inline; filename="logo.png"
+
+        iVBORw0KGgo=
+        --REL--
+
+        """;
+
+    [Fact]
+    public void PrilohaSPrazdnymTelem_NeshodiParser()
+    {
+        // MimeKit vrací Content == null u prázdného těla; force-unwrap tu dřív
+        // vyhazoval NullReferenceException na naprosto platné zprávě.
+        var e = EmailParser.ParseEml(S(PrazdnaPriloha));
+        Assert.Single(e.Attachments);
+        Assert.Equal("prazdny.bin", e.Attachments[0].FileName);
+        Assert.Equal(0, e.Attachments[0].SizeBytes);
+    }
+
+    [Fact]
+    public void InlineCastSPrazdnymTelem_SePocitaJakoNerozresena()
+    {
+        var e = EmailParser.ParseEml(S(PrazdnyInline));
+        Assert.Equal(1, e.UnresolvedInlineImages);
+        Assert.DoesNotContain("cid:", e.HtmlBodySanitized);
+        Assert.DoesNotContain("data:", e.HtmlBodySanitized);
+    }
+
+    [Fact]
+    public void CidSeDohledaBezOhleduNaVelikostPismen()
+    {
+        var e = EmailParser.ParseEml(S(CidJinaVelikostPismen));
+        Assert.Equal(0, e.UnresolvedInlineImages);
+        Assert.Contains("data:image/png;base64,iVBORw0KGgo=", e.HtmlBodySanitized);
+    }
 }
