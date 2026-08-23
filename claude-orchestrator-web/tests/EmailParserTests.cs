@@ -463,7 +463,12 @@ public class EmailParserTests
         s.Position = 0;
         var (bytes, name, ctype) =
             EmailParser.ExtractAttachmentBytes(s, EmailParser.Format.Msg, 0);
-        Assert.Equal(first.FileName, name);
+        // Assert.Equal by při selhání vypsalo skutečné jméno přílohy do výstupu
+        // testů. Assert.True vypíše jen zprávu. ContentType a SizeBytes níž
+        // zůstávají jako Assert.Equal schválně — "image/png" ani počet bajtů
+        // osobní údaj nenesou a informativní hláška je tam užitečnější.
+        Assert.True(first.FileName == name,
+            "Jméno přílohy z Parse a z ExtractAttachmentBytes se neshoduje.");
         Assert.Equal(first.ContentType, ctype);
         Assert.Equal(first.SizeBytes, bytes.LongLength);
     }
@@ -482,7 +487,9 @@ public class EmailParserTests
         using var s = OpenFixture();
         var e = EmailParser.Parse(s);
         Skip.If(e.HtmlBodySanitized is null, "Fixtura nemá HTML tělo.");
-        Assert.DoesNotContain("<script", e.HtmlBodySanitized, StringComparison.OrdinalIgnoreCase);
+        Assert.True(
+            !e.HtmlBodySanitized!.Contains("<script", StringComparison.OrdinalIgnoreCase),
+            "Sanitizované HTML stále obsahuje <script>.");
     }
 
     [SkippableFact]
@@ -493,8 +500,10 @@ public class EmailParserTests
         using var s = OpenFixture();
         var e = EmailParser.Parse(s);
         Skip.If(e.HtmlBodySanitized is null, "Fixtura nemá HTML tělo.");
-        Assert.Contains("data:", e.HtmlBodySanitized);
-        Assert.DoesNotContain("cid:", e.HtmlBodySanitized);
+        Assert.True(e.HtmlBodySanitized!.Contains("data:"),
+            "Sanitizované HTML neobsahuje žádnou data: URL — inline obrázek se nedosadil.");
+        Assert.True(!e.HtmlBodySanitized.Contains("cid:"),
+            "V sanitizovaném HTML zůstal nepřepsaný odkaz cid:.");
     }
 
     private sealed class NonSeekableStream : MemoryStream
