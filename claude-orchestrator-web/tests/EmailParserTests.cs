@@ -389,6 +389,20 @@ public class EmailParserTests
         Assert.Equal("iso-8859-2", Encoding.GetEncoding(28592).WebName);
     }
 
+    [Fact]
+    public void Parse_NechavaStreamOtevreny()
+    {
+        // EmailParser stream nevlastní. U .eml to platilo vždy; u .msg to
+        // MsgReader porušoval, dokud se mu nepředalo leaveStreamOpen. Tenhle
+        // test hlídá aspoň tu větev, kterou lze otestovat bez binární fixtury.
+        using var s = S(Prosty);
+        var e = EmailParser.Parse(s);
+        Assert.Equal("Příliš žluťoučký", e.Subject);
+
+        s.Position = 0;
+        Assert.Equal(EmailParser.Format.Eml, EmailParser.SniffFormat(s));
+    }
+
     private sealed class NonSeekableStream : MemoryStream
     {
         public override bool CanSeek => false;

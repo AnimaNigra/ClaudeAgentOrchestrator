@@ -39,6 +39,8 @@ public static class EmailParser
             : Format.Eml;
     }
 
+    /// <summary>Rozpozná formát a deleguje. Předaný stream zůstává otevřený
+    /// a použitelný i po návratu — u obou formátů.</summary>
     public static ParsedEmail Parse(Stream stream) =>
         SniffFormat(stream) == Format.Msg ? ParseMsg(stream) : ParseEml(stream);
 
@@ -162,7 +164,11 @@ public static class EmailParser
 
     public static ParsedEmail ParseMsg(Stream stream)
     {
-        using var msg = new MsgStorage.Message(stream);
+        // MsgReader si stream ve výchozím nastavení přivlastní a při Dispose ho
+        // zavře. Volající ho ale vlastní sám (a u .eml větve zůstává otevřený),
+        // takže se to musí vypnout — jinak po Parse spadne každé další čtení
+        // ze stejného streamu na ObjectDisposedException.
+        using var msg = new MsgStorage.Message(stream, FileAccess.Read, leaveStreamOpen: true);
 
         var headers = new List<HeaderEntry>();
         if (msg.Headers?.RawHeaders is { } rawHeaders)
@@ -211,7 +217,8 @@ public static class EmailParser
     }
 
     /// <summary>Znovu naparsuje zdroj a vytáhne N-tou přílohu. Bezstavové
-    /// záměrně — server si mezi požadavky nic nedrží (spec §4.1).</summary>
+    /// záměrně — server si mezi požadavky nic nedrží (spec §4.1).
+    /// Předaný stream zůstává otevřený a použitelný i po návratu.</summary>
     public static (byte[] Bytes, string FileName, string ContentType) ExtractAttachmentBytes(
         Stream stream, Format format, int index) => format switch
     {
@@ -240,7 +247,8 @@ public static class EmailParser
     private static (byte[] Bytes, string FileName, string ContentType) ExtractMsgAttachment(
         Stream stream, int index)
     {
-        using var msg = new MsgStorage.Message(stream);
+        // Stejný důvod jako v ParseMsg: stream patří volajícímu.
+        using var msg = new MsgStorage.Message(stream, FileAccess.Read, leaveStreamOpen: true);
         var all = msg.Attachments.OfType<MsgStorage.Attachment>().ToList();
         if (index < 0 || index >= all.Count)
             throw new IndexOutOfRangeException($"Attachment index {index} out of range (0..{all.Count - 1}).");
