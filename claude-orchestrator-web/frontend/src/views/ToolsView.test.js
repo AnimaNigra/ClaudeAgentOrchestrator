@@ -25,7 +25,7 @@ describe('ToolsView', () => {
   it('vykreslí odkaz na každý nástroj', async () => {
     const wrapper = await mountAt('/tools/base64')
     const labels = wrapper.findAll('aside a').map(l => l.text())
-    expect(labels).toEqual(['Base64', 'URL', 'HTML', 'Basic Auth', 'JWT', 'UUID', 'Hash'])
+    expect(labels).toEqual(['Base64', 'URL', 'HTML', 'Basic Auth', 'JWT', 'UUID', 'Hash', 'E-mail'])
   })
 
   it('přepnutí slugu vymění panel', async () => {
@@ -213,5 +213,12 @@ describe('ToolsView', () => {
     // Publikovaný vektor pro SHA-1("abc") — jiná délka i hodnota, takže
     // přepínač je prokazatelně funkční.
     expect(wrapper.text()).toContain('a9993e364706816aba3e25717850c26c9cd0d89d')
+  })
+
+  it('E-mail nástroj se připojí s správným nadpisem', async () => {
+    const wrapper = await mountAt('/tools/email')
+    expect(wrapper.find('h2').text()).toBe('E-mail')
+    expect(wrapper.find('input[type="text"]').exists()).toBe(true)
+    expect(wrapper.find('input[type="file"]').exists()).toBe(true)
   })
 })
