@@ -39,7 +39,7 @@ public class ToolsController : ControllerBase
     }
 
     [HttpPost("parse")]
-    [RequestSizeLimit(104_857_600)]
+    [RequestSizeLimit(LocalFilePath.MaxFileBytes)]
     public IActionResult ParseUpload(IFormFile? file)
     {
         if (RejectUpload(file) is { } bad) return bad;
@@ -77,7 +77,7 @@ public class ToolsController : ControllerBase
     }
 
     [HttpPost("attachment")]
-    [RequestSizeLimit(104_857_600)]
+    [RequestSizeLimit(LocalFilePath.MaxFileBytes)]
     public IActionResult AttachmentUpload(IFormFile? file, [FromForm] int index)
     {
         if (RejectUpload(file) is { } bad) return bad;
@@ -100,9 +100,13 @@ public class ToolsController : ControllerBase
     private FileContentResult Attachment(Stream stream, int index)
     {
         var format = EmailParser.SniffFormat(stream);
-        var (bytes, fileName, contentType) =
+        var (bytes, fileName, _) =
             EmailParser.ExtractAttachmentBytes(stream, format, index);
-        return File(bytes, contentType, fileDownloadName: fileName);
+        // Skutečný typ z hlaviček zprávy se ignoruje záměrně — klient si
+        // odpověď vždycky čte jako Blob, takže na Content-Type nezáleží, a
+        // tohle je poslední místo, kde by si zpráva mohla vybrat, pod jakou
+        // nálepkou naše doména její bajty vydá.
+        return File(bytes, "application/octet-stream", fileDownloadName: fileName);
     }
 
     /// <summary>IFormFile.OpenReadStream() nemusí být seekovatelný, ale

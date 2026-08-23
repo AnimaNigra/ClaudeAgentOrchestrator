@@ -52,6 +52,17 @@ describe('emailApi', () => {
       })
       await expect(api.parseEmail({ path: 'x.eml' })).rejects.toThrow(/500/)
     })
+
+    it('u 413 s prázdným tělem vyhodí českou hlášku o velikosti souboru', async () => {
+      // Kestrel na překročení RequestSizeLimit odpovídá 413 s prázdným tělem.
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 413,
+        json: async () => { throw new Error('not json') },
+      })
+      await expect(api.parseEmail({ file: new File(['x'], 'x.eml') }))
+        .rejects.toThrow('Soubor je příliš velký (max 100 MB).')
+    })
   })
 
   describe('fetchAttachment', () => {

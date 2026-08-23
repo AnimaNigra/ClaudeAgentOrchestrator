@@ -285,6 +285,38 @@ public class EmailParserTests
         Assert.Equal(0, e.Attachments[0].SizeBytes);
     }
 
+    private const string PrazdneJmenoPrilohy = """
+        From: a@example.cz
+        To: b@example.cz
+        Subject: Prazdne jmeno
+        MIME-Version: 1.0
+        Content-Type: multipart/mixed; boundary="MIX"
+
+        --MIX
+        Content-Type: text/plain; charset=utf-8
+
+        telo
+        --MIX
+        Content-Type: application/octet-stream
+        Content-Disposition: attachment; filename=""
+
+        data
+        --MIX--
+
+        """;
+
+    [Fact]
+    public void PrazdneJmenoPrilohy_SeNahradiVygenerovanym()
+    {
+        // Content-Disposition: attachment; filename="" je platná hlavička a
+        // MimePart.FileName u ní vrátí "", ne null — `??` samotné to
+        // nezachytí. Bez opravy by prázdné jméno prošlo až do File(...) a
+        // ASP.NET Core by vynechal hlavičku Content-Disposition úplně.
+        var e = EmailParser.ParseEml(S(PrazdneJmenoPrilohy));
+        Assert.Single(e.Attachments);
+        Assert.Equal("attachment-0", e.Attachments[0].FileName);
+    }
+
     [Fact]
     public void InlineCastSPrazdnymTelem_SePocitaJakoNerozresena()
     {
@@ -300,6 +332,51 @@ public class EmailParserTests
         var e = EmailParser.ParseEml(S(CidJinaVelikostPismen));
         Assert.Equal(0, e.UnresolvedInlineImages);
         Assert.Contains("data:image/png;base64,iVBORw0KGgo=", e.HtmlBodySanitized);
+    }
+
+    [Fact]
+    public void PrilisVelkyInlineObrazek_SeNedosadiAlePodlimitniAnoDal()
+    {
+        // Fixtura překračuje EmailParser.MaxInlineImageBytes (10 MB) tím, že
+        // base64 v těle dekóduje na přesně 11 MB nulových bajtů. Generuje se
+        // programově přes Convert.ToBase64String, aby test nemusel v souboru
+        // nést desítky MB textu; MimeKit dekóduje base64 část bez ohledu na
+        // to, že leží na jednom obřím řádku bez zalomení. Vedle ní je i
+        // normální malý inline obrázek — ten musí projít dál beze změny.
+        var big = Convert.ToBase64String(new byte[11 * 1024 * 1024]);
+        var eml = $"""
+            From: a@example.cz
+            To: b@example.cz
+            Subject: Velky inline
+            MIME-Version: 1.0
+            Content-Type: multipart/related; boundary="REL"
+
+            --REL
+            Content-Type: text/html; charset=utf-8
+
+            <p><img src="cid:small"><img src="cid:big"></p>
+            --REL
+            Content-Type: image/png
+            Content-ID: <small>
+            Content-Transfer-Encoding: base64
+            Content-Disposition: inline; filename="small.png"
+
+            iVBORw0KGgo=
+            --REL
+            Content-Type: image/png
+            Content-ID: <big>
+            Content-Transfer-Encoding: base64
+            Content-Disposition: inline; filename="big.png"
+
+            {big}
+            --REL--
+
+            """;
+        var e = EmailParser.ParseEml(S(eml));
+
+        Assert.Equal(1, e.UnresolvedInlineImages);
+        Assert.Contains("data:image/png;base64,iVBORw0KGgo=", e.HtmlBodySanitized);
+        Assert.DoesNotContain("cid:big", e.HtmlBodySanitized);
     }
 
     [Fact]

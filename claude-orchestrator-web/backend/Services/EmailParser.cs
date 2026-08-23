@@ -15,6 +15,14 @@ public static class EmailParser
 {
     public enum Format { Eml, Msg }
 
+    /// <summary>Strop pro jeden vložený obrázek a pro jejich součet. Vložené
+    /// obrázky se kódují do base64 přímo do těla (spec §6.2), takže velký
+    /// obrázek nafoukne odpověď o třetinu navíc — přesně ten důvod, proč spec
+    /// §4.1 odmítla posílat takhle přílohy. Co se nevejde, se nedosadí a
+    /// započítá se jako nerozřešené, o čemž UI uživatele zpraví.</summary>
+    private const long MaxInlineImageBytes = 10L * 1024 * 1024;
+    private const long MaxInlineTotalBytes = 25L * 1024 * 1024;
+
     static EmailParser()
     {
         // .NET Core nevozí legacy kódové stránky. Reálné .msg z českého Outlooku
@@ -54,7 +62,7 @@ public static class EmailParser
         {
             attachments.Add(new AttachmentInfo(
                 idx,
-                att.FileName ?? att.ContentDisposition?.FileName ?? $"attachment-{idx}",
+                FileNameOrFallback(att.FileName, att.ContentDisposition?.FileName, idx),
                 att.ContentType?.MimeType ?? "application/octet-stream",
                 MeasureMimePart(att)));
             idx++;
@@ -81,6 +89,17 @@ public static class EmailParser
     private static string FormatMailbox(MailboxAddress m)
         => string.IsNullOrEmpty(m.Name) ? m.Address : $"{m.Name} <{m.Address}>";
 
+    /// <summary>Jako `??`, ale prázdný řetězec bere jako chybějící hodnotu.
+    /// `Content-Disposition: attachment; filename=""` je platná hlavička, kterou
+    /// `??` samotné nezachytí — prázdné jméno by pak dotáhlo `File(...)` k tomu,
+    /// že vynechá hlavičku Content-Disposition úplně a prohlížeč by dostal cizí
+    /// bajty pod cizím Content-Type na naší doméně. Větev .msg tohle už řešila
+    /// přes IsNullOrEmpty, tady se s ní sjednocuje.</summary>
+    private static string FileNameOrFallback(string? fileName, string? dispositionFileName, int index)
+        => !string.IsNullOrEmpty(fileName) ? fileName
+         : !string.IsNullOrEmpty(dispositionFileName) ? dispositionFileName
+         : $"attachment-{index}";
+
     private static long MeasureMimePart(MimePart part)
     {
         // Content je null u části s prázdným tělem i u streamu useknutého
@@ -106,15 +125,22 @@ public static class EmailParser
     private static Dictionary<string, string> BuildEmlInlineMap(MimeMessage msg)
     {
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        long total = 0;
         foreach (var part in msg.BodyParts.OfType<MimePart>())
         {
             if (string.IsNullOrEmpty(part.ContentId)) continue;
             // Bez těla není co dosadit — část se do mapy nedostane a její cid:
             // se tím pádem započítá jako nerozřešené, což je správné chování.
             if (part.Content is null) continue;
-            var ctype = part.ContentType?.MimeType ?? "application/octet-stream";
             using var ms = new MemoryStream();
             part.Content.DecodeTo(ms);
+            var size = ms.Length;
+            // Nad stropem pro jeden obrázek nebo pro jejich součet se
+            // nedosadí — mapa o té části neví, takže dopadne stejně jako
+            // chybějící tělo výše: cid: zůstane a započítá se jako nerozřešený.
+            if (size > MaxInlineImageBytes || total + size > MaxInlineTotalBytes) continue;
+            total += size;
+            var ctype = part.ContentType?.MimeType ?? "application/octet-stream";
             map[part.ContentId] = $"data:{ctype};base64,{Convert.ToBase64String(ms.ToArray())}";
         }
         return map;
@@ -178,12 +204,22 @@ public static class EmailParser
         var inline = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var attachments = new List<AttachmentInfo>();
         var idx = 0;
+        long inlineTotal = 0;
         foreach (var a in msg.Attachments.OfType<MsgStorage.Attachment>())
         {
             var name = !string.IsNullOrEmpty(a.FileName) ? a.FileName : $"attachment-{idx}";
             var ctype = !string.IsNullOrEmpty(a.MimeType) ? a.MimeType : "application/octet-stream";
             if (!string.IsNullOrEmpty(a.ContentId) && a.Data is not null)
-                inline[a.ContentId] = $"data:{ctype};base64,{Convert.ToBase64String(a.Data)}";
+            {
+                // Stejné stropy jako u .eml větve (BuildEmlInlineMap) — nad
+                // limit se nedosadí a cid: zůstane nerozřešený.
+                var size = a.Data.LongLength;
+                if (size <= MaxInlineImageBytes && inlineTotal + size <= MaxInlineTotalBytes)
+                {
+                    inline[a.ContentId] = $"data:{ctype};base64,{Convert.ToBase64String(a.Data)}";
+                    inlineTotal += size;
+                }
+            }
             attachments.Add(new AttachmentInfo(idx, name, ctype, a.Data?.LongLength ?? 0L));
             idx++;
         }
@@ -240,7 +276,7 @@ public static class EmailParser
         // ne chybu. Stáhne se prázdný soubor místo pádu s NullReferenceException.
         part.Content?.DecodeTo(ms);
         return (ms.ToArray(),
-                part.FileName ?? part.ContentDisposition?.FileName ?? $"attachment-{index}",
+                FileNameOrFallback(part.FileName, part.ContentDisposition?.FileName, index),
                 part.ContentType?.MimeType ?? "application/octet-stream");
     }
 

@@ -16,8 +16,7 @@
     </div>
 
     <p v-if="email.unresolvedInlineImages > 0" class="text-xs text-amber-400">
-      U {{ email.unresolvedInlineImages }} vložených obrázků se nepodařilo dohledat
-      odpovídající část zprávy, takže se nezobrazí.
+      {{ unresolvedNotice }}
     </p>
 
     <!--
@@ -29,7 +28,7 @@
     <iframe
       v-if="active === 'html'"
       sandbox=""
-      :srcdoc="email.htmlBodySanitized"
+      :srcdoc="framedHtml"
       class="w-full h-[60vh] bg-white border border-gray-700 rounded"
     />
     <pre
@@ -57,8 +56,32 @@ const tabs = computed(() => {
 
 const active = ref(tabs.value[0] ?? 'text')
 
+// Jednotné číslo je nejčastější případ ("1 vložený obrázek"), takže si
+// zaslouží vlastní shodu — ne jen ohnutý plurál.
+const unresolvedNotice = computed(() => {
+  const n = props.email.unresolvedInlineImages
+  return n === 1
+    ? 'U 1 vloženého obrázku se nepodařilo dohledat odpovídající část zprávy, takže se nezobrazí.'
+    : `U ${n} vložených obrázků se nepodařilo dohledat odpovídající část zprávy, takže se nezobrazí.`
+})
+
 // Po načtení jiné zprávy nemusí dosavadní tab existovat — spadni na první.
 watch(tabs, list => {
   if (!list.includes(active.value)) active.value = list[0] ?? 'text'
+})
+
+// sandbox="" řeší spouštění (skripty, formuláře, navigaci), ale NEŘEŠÍ
+// stahování podřízených zdrojů — obrázek z ciziny by se načetl a odesílateli
+// prozradil IP adresu, prohlížeč i čas otevření. Tohle je klasický sledovací
+// pixel a běžní poštovní klienti ho blokují. Aplikace žádné CSP nemá, takže
+// se dosazuje přímo do dokumentu v srcdoc.
+//   default-src 'none'  — nic zvenčí
+//   img-src data:       — jen obrázky, které jsme sami dosadili z příloh
+//   style-src/font-src  — inline styly a fonty z dat, aby zpráva nevypadala rozbitě
+const framedHtml = computed(() => {
+  if (!props.email.htmlBodySanitized) return ''
+  const csp = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:"
+  return `<meta http-equiv="Content-Security-Policy" content="${csp}">` +
+    props.email.htmlBodySanitized
 })
 </script>

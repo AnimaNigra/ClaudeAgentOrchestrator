@@ -74,12 +74,23 @@ describe('EmailBody', () => {
     // Prázdný sandbox je nejpřísnější varianta (spec §5.2) — kdyby sem někdo
     // dopsal allow-scripts, spadne tenhle test.
     expect(frame.attributes('sandbox')).toBe('')
-    expect(frame.attributes('srcdoc')).toBe('<p>ahoj</p>')
+    expect(frame.attributes('srcdoc')).toBe(
+      `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:"><p>ahoj</p>`
+    )
   })
 
   it('do iframu nikdy nepustí syrové HTML', () => {
     const w = mount(EmailBody, { props: { email: EMAIL } })
     expect(w.find('iframe').attributes('srcdoc')).not.toContain('script')
+  })
+
+  it('do rámu vloží CSP, které blokuje cizí zdroje', () => {
+    const w = mount(EmailBody, { props: { email: EMAIL } })
+    const srcdoc = w.find('iframe').attributes('srcdoc')
+    expect(srcdoc).toContain("default-src 'none'")
+    expect(srcdoc).toContain('img-src data:')
+    // Naše dosazené obrázky projít musí, cizí http(s) ne.
+    expect(srcdoc).not.toContain('img-src *')
   })
 
   it('tab text ukáže textovou verzi', async () => {
@@ -109,6 +120,12 @@ describe('EmailBody', () => {
     const w = mount(EmailBody, { props: { email: { ...EMAIL, unresolvedInlineImages: 2 } } })
     expect(w.text()).toContain('2')
     expect(w.text()).toContain('nepodařilo dohledat')
+  })
+
+  it('u jednoho nerozřešeného obrázku použije jednotné číslo', () => {
+    const w = mount(EmailBody, { props: { email: { ...EMAIL, unresolvedInlineImages: 1 } } })
+    expect(w.text()).toContain('U 1 vloženého obrázku se nepodařilo dohledat')
+    expect(w.text()).not.toContain('vložených obrázků')
   })
 
   it('bez nerozřešených obrázků neupozorňuje', () => {

@@ -93,6 +93,9 @@ function onDrop(event) {
 
 function onPick(event) {
   const file = event.target.files?.[0]
+  // Bez vynulování by výběr téhož souboru podruhé nevyvolal žádnou událost —
+  // typicky hned po chybě, kdy to uživatel zkusí znovu.
+  event.target.value = ''
   if (file) load({ file })
 }
 

@@ -8,6 +8,9 @@ async function parseError(res) {
     const body = await res.json()
     if (body?.error) return new Error(body.error)
   } catch {}
+  // Kestrel na překročení RequestSizeLimit odpovídá 413 s prázdným tělem —
+  // bez tohohle by uživatel v jinak české aplikaci uviděl "HTTP 413".
+  if (res.status === 413) return new Error('Soubor je příliš velký (max 100 MB).')
   return new Error(`HTTP ${res.status}`)
 }
 

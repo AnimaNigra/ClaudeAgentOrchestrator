@@ -149,6 +149,27 @@ describe('EmailTool', () => {
     expect(emailApi.parseEmail).toHaveBeenCalledWith({ file })
   })
 
+  it('výběr téhož souboru podruhé zavolá parseEmail znovu', async () => {
+    // Input se po výběru vynuluje právě proto, aby prohlížeč vyvolal change
+    // i při druhém výběru stejného souboru — bez vynulování by "change" podruhé
+    // vůbec nepřišel, protože se hodnota inputu z pohledu prohlížeče nezměnila.
+    emailApi.parseEmail.mockResolvedValue(EMAIL)
+    const w = mount(EmailTool)
+    const file = new File(['obsah'], 'vybrana.eml')
+    const input = w.find('input[type="file"]')
+
+    Object.defineProperty(input.element, 'files', { value: [file], configurable: true })
+    await input.trigger('change')
+    await flushPromises()
+
+    Object.defineProperty(input.element, 'files', { value: [file], configurable: true })
+    await input.trigger('change')
+    await flushPromises()
+
+    expect(emailApi.parseEmail).toHaveBeenCalledTimes(2)
+    expect(input.element.value).toBe('')
+  })
+
   it('starší načtení nepřepíše novější, i když doběhne později', async () => {
     let resolveStarsi
     emailApi.parseEmail

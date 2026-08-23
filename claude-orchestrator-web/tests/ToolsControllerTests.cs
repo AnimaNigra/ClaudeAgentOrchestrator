@@ -120,7 +120,9 @@ public class ToolsControllerTests : IDisposable
     {
         var res = Assert.IsType<FileContentResult>(_ctrl.AttachmentByPath(WriteEml(), 0));
         Assert.Equal("pozn.txt", res.FileDownloadName);
-        Assert.Equal("text/plain", res.ContentType);
+        // Skutečný typ z hlaviček zprávy se ignoruje záměrně — viz komentář
+        // u Attachment() v ToolsController.
+        Assert.Equal("application/octet-stream", res.ContentType);
         Assert.Equal("obsah prilohy", Encoding.UTF8.GetString(res.FileContents).Trim());
     }
 
@@ -142,6 +144,7 @@ public class ToolsControllerTests : IDisposable
     {
         var res = Assert.IsType<FileContentResult>(_ctrl.AttachmentUpload(Upload(Eml), 0));
         Assert.Equal("pozn.txt", res.FileDownloadName);
+        Assert.Equal("application/octet-stream", res.ContentType);
         Assert.Equal("obsah prilohy", Encoding.UTF8.GetString(res.FileContents).Trim());
     }
 
