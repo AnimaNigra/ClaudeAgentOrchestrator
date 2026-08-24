@@ -18,6 +18,7 @@ import BasicAuthTool from '../components/tools/BasicAuthTool.vue'
 import JwtTool from '../components/tools/JwtTool.vue'
 import UuidTool from '../components/tools/UuidTool.vue'
 import HashTool from '../components/tools/HashTool.vue'
+import EmailTool from '../components/tools/EmailTool.vue'
 
 // Pořadí určuje pořadí v sidebaru. První položka je zároveň fallback
 // pro neznámý nebo chybějící slug v route.
@@ -29,6 +30,7 @@ const TOOLS = [
   { slug: 'jwt', label: 'JWT', component: markRaw(JwtTool) },
   { slug: 'uuid', label: 'UUID', component: markRaw(UuidTool) },
   { slug: 'hash', label: 'Hash', component: markRaw(HashTool) },
+  { slug: 'email', label: 'E-mail', component: markRaw(EmailTool) },
 ]
 
 const route = useRoute()

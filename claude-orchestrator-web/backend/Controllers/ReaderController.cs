@@ -23,26 +23,35 @@ public class ReaderController : ControllerBase
         new(StringComparer.OrdinalIgnoreCase)
         { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg" };
 
+    /// <summary>
+    /// Převede výsledek sdílené validace na HTTP odpověď. Reader má anglické UI,
+    /// takže se sem NEPROPOUŠTÍ české `Message` z LocalFilePath — ty jsou pro
+    /// česky psaný prohlížeč e-mailů. Tvar těla (`error`, u přípony i `allowed`)
+    /// zůstává stejný jako před sjednocením validace; frontend na něj spoléhá.
+    /// </summary>
+    private IActionResult? Reject(LocalFilePathResult result, IReadOnlyCollection<string> allowed)
+    {
+        if (result.Ok) return null;
+        return result.Error switch
+        {
+            PathError.NotFound =>
+                NotFound(new { error = "File not found", path = result.FullPath }),
+            PathError.UnsupportedExtension =>
+                BadRequest(new { error = "Unsupported extension", allowed = allowed.ToArray() }),
+            PathError.Traversal =>
+                BadRequest(new { error = "Path must not contain '..' segments" }),
+            PathError.TooLarge =>
+                BadRequest(new { error = "File too large" }),
+            _ => BadRequest(new { error = "Invalid path" }),
+        };
+    }
+
     [HttpGet("content")]
     public IActionResult GetContent([FromQuery] string? path)
     {
-        if (string.IsNullOrWhiteSpace(path))
-            return BadRequest(new { error = "Invalid path" });
-
-        string full;
-        try { full = Path.GetFullPath(path); }
-        catch { return BadRequest(new { error = "Invalid path" }); }
-
-        var ext = Path.GetExtension(full);
-        if (!ContentExtensions.Contains(ext))
-            return BadRequest(new
-            {
-                error = "Unsupported extension",
-                allowed = ContentExtensions.ToArray()
-            });
-
-        if (!System.IO.File.Exists(full))
-            return NotFound(new { error = "File not found", path = full });
+        var validated = LocalFilePath.Validate(path, ContentExtensions);
+        if (Reject(validated, ContentExtensions) is { } bad) return bad;
+        var full = validated.FullPath;
 
         try
         {
@@ -60,23 +69,10 @@ public class ReaderController : ControllerBase
     [HttpGet("raw")]
     public IActionResult GetRaw([FromQuery] string? path)
     {
-        if (string.IsNullOrWhiteSpace(path))
-            return BadRequest(new { error = "Invalid path" });
-
-        string full;
-        try { full = Path.GetFullPath(path); }
-        catch { return BadRequest(new { error = "Invalid path" }); }
-
+        var validated = LocalFilePath.Validate(path, RawExtensions);
+        if (Reject(validated, RawExtensions) is { } bad) return bad;
+        var full = validated.FullPath;
         var ext = Path.GetExtension(full);
-        if (!RawExtensions.Contains(ext))
-            return BadRequest(new
-            {
-                error = "Unsupported extension",
-                allowed = RawExtensions.ToArray()
-            });
-
-        if (!System.IO.File.Exists(full))
-            return NotFound(new { error = "File not found", path = full });
 
         var contentType = ext.ToLowerInvariant() switch
         {

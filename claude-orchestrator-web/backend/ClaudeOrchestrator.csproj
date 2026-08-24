@@ -12,6 +12,17 @@
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
   </ItemGroup>
 
+  <!-- Prohlížeč e-mailů (Tools). OpenMcdf se nereferencuje záměrně —
+       MsgReader si ho táhne tranzitivně a žádný náš kód ho nevolá.
+       CodePages je naopak nutný: .msg z českého Outlooku deklarují
+       ISO-8859-2 (28592), kterou .NET Core sám o sobě nezná. -->
+  <ItemGroup>
+    <PackageReference Include="MimeKit" Version="4.16.0" />
+    <PackageReference Include="MsgReader" Version="6.0.11" />
+    <PackageReference Include="HtmlSanitizer" Version="9.0.892" />
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.11" />
+  </ItemGroup>
+
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>ClaudeOrchestrator.Tests</_Parameter1>
