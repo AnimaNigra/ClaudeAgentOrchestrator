@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import * as signalR from '@microsoft/signalr'
+import { useSettingsStore } from './settings'
 
 export const useAgentsStore = defineStore('agents', () => {
   const agents = ref({})        // id → agent object
@@ -60,8 +61,10 @@ export const useAgentsStore = defineStore('agents', () => {
     window.addEventListener('click', warm, { once: true })
   }
 
-  async function playDing() {
+  async function playDing(agentId = null) {
     try {
+      const gainValue = useSettingsStore().gainFor(agentId)
+      if (gainValue <= 0) return   // muted globally or for this agent
       const ctx = await _ensureAudio()
       if (!ctx) return
       const gain = ctx.createGain()
@@ -73,7 +76,7 @@ export const useAgentsStore = defineStore('agents', () => {
         osc.frequency.value = freq
         osc.type = 'sine'
         const t = ctx.currentTime + i * 0.15
-        gain.gain.setValueAtTime(0.25, t)
+        gain.gain.setValueAtTime(gainValue, t)
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3)
         osc.start(t)
         osc.stop(t + 0.3)
@@ -83,7 +86,7 @@ export const useAgentsStore = defineStore('agents', () => {
 
   async function notifyIdle(agent) {
     if (!agent) return
-    await playDing()
+    await playDing(agent.id)
     if (Notification.permission === 'granted') {
       new Notification(`⏳ ${agent.name} waiting for input`, {
         body: 'Agent needs your response.',
@@ -95,6 +98,17 @@ export const useAgentsStore = defineStore('agents', () => {
   // Tracks which agents have already received an idle notification this session.
   // Cleared when the agent transitions back to running.
   const _notifiedIdle = new Set()
+
+  // Drops every trace of an agent that exited, including a mute the user
+  // set for it, so the persisted mute list can't grow forever.
+  function removeAgent(agentId) {
+    delete agents.value[agentId]
+    delete _ptyBuffers[agentId]
+    delete _ptyHandlers[agentId]
+    useSettingsStore().forgetAgent(agentId)
+    if (activeAgentId.value === agentId)
+      activeAgentId.value = Object.keys(agents.value)[0] ?? null
+  }
 
   // ── SignalR ──────────────────────────────────────────
   async function connect() {
@@ -135,9 +149,14 @@ export const useAgentsStore = defineStore('agents', () => {
             body: JSON.stringify({ approved: true }),
           })
         } else {
-          const wasEmpty = pendingPermissions.value.length === 0
+          // One notification per batch of pending permissions — but a muted
+          // agent must not swallow the batch's sound, so an audible request
+          // still rings when nothing already queued could have been heard.
+          const audible = id => useSettingsStore().gainFor(id) > 0
+          const notify = pendingPermissions.value.length === 0
+            || (audible(data.agentId) && !pendingPermissions.value.some(p => audible(p.agentId)))
           pendingPermissions.value.push(data)
-          if (wasEmpty) notifyIdle(agents.value[agentId]) // notify only on first in queue
+          if (notify) notifyIdle(agents.value[agentId])
         }
       } else if (eventType === 'agent_notification') {
         notifyIdle(agents.value[agentId])
@@ -152,13 +171,7 @@ export const useAgentsStore = defineStore('agents', () => {
         }
       } else if (eventType === 'agent_killed' || eventType === 'agent_exited') {
         // Remove from list after a brief pause so user sees the Done state
-        setTimeout(() => {
-          delete agents.value[agentId]
-          delete _ptyBuffers[agentId]
-          delete _ptyHandlers[agentId]
-          if (activeAgentId.value === agentId)
-            activeAgentId.value = Object.keys(agents.value)[0] ?? null
-        }, 2000)
+        setTimeout(() => removeAgent(agentId), 2000)
       }
     })
 
@@ -242,5 +255,6 @@ export const useAgentsStore = defineStore('agents', () => {
     agentList,
     connect, spawnAgent, createWorktree, sendKeystroke, resizePty, killAgent,
     registerPtyHandler, unregisterPtyHandler, addAlwaysAllowed, reorderAgents,
+    playDing, removeAgent,
   }
 })

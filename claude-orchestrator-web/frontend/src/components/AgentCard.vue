@@ -57,6 +57,13 @@
       </div>
       <div class="flex items-center gap-2">
         <button
+          class="text-[10px] px-1.5 py-0.5 rounded hover:bg-gray-700/50 transition-colors"
+          :class="isMuted ? 'text-amber-400' : 'text-gray-600 hover:text-gray-300'"
+          @click.stop="settings.toggleAgentMute(agent.id)"
+          :title="isMuted ? 'Notification sound muted for this agent' : 'Mute notification sound for this agent'"
+          :aria-label="isMuted ? 'Unmute notification sound' : 'Mute notification sound'"
+        >{{ isMuted ? '🔕' : '🔔' }}</button>
+        <button
           v-if="!agent.worktreeBranch"
           class="text-[10px] text-gray-500 hover:text-emerald-400 px-1.5 py-0.5 rounded hover:bg-gray-700/50 transition-colors"
           @click.stop="$emit('create-worktree', agent)"
@@ -82,9 +89,13 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useSettingsStore } from '../stores/settings'
 
 const props = defineProps({ agent: Object, isActive: Boolean })
 defineEmits(['select', 'review', 'create-worktree'])
+
+const settings = useSettingsStore()
+const isMuted = computed(() => settings.isAgentMuted(props.agent.id))
 
 const STATUS_ICONS = {
   Running: '🟢', Idle: '🔵', Done: '✅', Error: '🔴', Blocked: '🟡'
