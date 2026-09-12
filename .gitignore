@@ -511,3 +511,7 @@ dist/
 # se jmény a adresami třetích osob — do repozitáře nepatří. Testy je přeskočí,
 # když chybí.
 claude-orchestrator-web/tests/fixtures-local/
+# Pojistka: .msg/.eml se do repozitare nedostane odnikud, ne jen z fixtures-local.
+*.msg
+*.eml
+
