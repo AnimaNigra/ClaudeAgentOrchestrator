@@ -51,8 +51,13 @@
     <Exec WorkingDirectory="$(MSBuildProjectDirectory)\pty-proxy" Command="npm install" />
   </Target>
 
-  <!-- Production: build Vue into wwwroot -->
-  <Target Name="BuildFrontend" BeforeTargets="Build" Condition="'$(Configuration)' == 'Release'">
+  <!-- Production: build Vue into wwwroot.
+       SkipFrontendBuild=true is for 'publish': MSBuild globs wwwroot into the
+       StaticWebAssets item group at evaluation time, so a Vite run inside the
+       publish wipes wwwroot (emptyOutDir) and rewrites the mermaid chunk
+       hashes the manifest already recorded -> MSB3030. Build the frontend
+       first, then publish with this flag. -->
+  <Target Name="BuildFrontend" BeforeTargets="Build" Condition="'$(Configuration)' == 'Release' AND '$(SkipFrontendBuild)' != 'true'">
     <Exec WorkingDirectory="$(SpaRoot)" Command="npm run build" />
   </Target>
 </Project>
