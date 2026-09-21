@@ -42,4 +42,76 @@ public class TerminalLogWriterTests : IDisposable
         await w.DisposeAsync();
         await w.DisposeAsync();   // must not throw
     }
+
+    // ── Size-based rotation ─────────────────────────────────────────────
+
+    private static byte[] B(string s) => Encoding.UTF8.GetBytes(s);
+    private string Current => Path.Combine(_dir, "terminal.log");
+    private string Backup  => Path.Combine(_dir, "terminal.log.1");
+
+    [Fact]
+    public async Task Write_ThatWouldExceedMax_RotatesCurrentIntoBackupFirst()
+    {
+        var w = new TerminalLogWriter(Current, maxBytes: 10);
+        w.Write(B("123456"));   // 6  – fits
+        w.Write(B("abcdef"));   // 12 – rotate, then write into fresh file
+        w.Write(B("new"));      // 9  – fits
+        await w.DisposeAsync();
+
+        Assert.Equal("123456",    await File.ReadAllTextAsync(Backup));
+        Assert.Equal("abcdefnew", await File.ReadAllTextAsync(Current));
+    }
+
+    [Fact]
+    public async Task SecondRotation_ReplacesPreviousBackup()
+    {
+        var w = new TerminalLogWriter(Current, maxBytes: 4);
+        w.Write(B("aaaa"));
+        w.Write(B("bbbb"));     // rotate: .1 = aaaa
+        w.Write(B("cc"));       // rotate: .1 = bbbb
+        await w.DisposeAsync();
+
+        Assert.Equal("bbbb", await File.ReadAllTextAsync(Backup));
+        Assert.Equal("cc",   await File.ReadAllTextAsync(Current));
+        Assert.False(File.Exists(Backup + ".1"));   // never more than one backup
+    }
+
+    [Fact]
+    public async Task PreExistingOversizedFile_RotatesOnFirstWrite()
+    {
+        await File.WriteAllTextAsync(Current, new string('o', 20));
+        var w = new TerminalLogWriter(Current, maxBytes: 10);
+        w.Write(B("x"));
+        await w.DisposeAsync();
+
+        Assert.Equal(20,  new FileInfo(Backup).Length);
+        Assert.Equal("x", await File.ReadAllTextAsync(Current));
+    }
+
+    [Fact]
+    public async Task SingleWriteLargerThanMax_DoesNotRotateEmptyFile()
+    {
+        var w = new TerminalLogWriter(Current, maxBytes: 4);
+        w.Write(B("abcdefgh"));
+        await w.DisposeAsync();
+
+        Assert.False(File.Exists(Backup));
+        Assert.Equal("abcdefgh", await File.ReadAllTextAsync(Current));
+    }
+
+    [Fact]
+    public async Task WhenBackupRenameIsBlocked_StillCapsCurrentFile()
+    {
+        var w = new TerminalLogWriter(Current, maxBytes: 4);
+        w.Write(B("aaaa"));
+
+        // A reader without FileShare.Delete blocks File.Move on Windows.
+        using (new FileStream(Current, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        {
+            w.Write(B("bbbb"));
+        }
+        await w.DisposeAsync();
+
+        Assert.Equal("bbbb", await File.ReadAllTextAsync(Current));
+    }
 }

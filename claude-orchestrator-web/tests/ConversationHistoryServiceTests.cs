@@ -154,6 +154,21 @@ public class ConversationHistoryServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateTerminalLogWriter_HonoursTerminalLogMaxMB()
+    {
+        var svc = New(new HistoryOptions { TerminalLogMaxMB = 1 });
+        var a = A();
+        var w = svc.CreateTerminalLogWriter(a)!;
+        w.Write(new byte[1024 * 1024]);   // exactly the cap – fits
+        w.Write(new byte[1]);             // would exceed – rotates first
+        await w.DisposeAsync();
+
+        var dir = svc.ResolveAgentDir(a);
+        Assert.Equal(1024 * 1024, new FileInfo(Path.Combine(dir, "terminal.log.1")).Length);
+        Assert.Equal(1,           new FileInfo(Path.Combine(dir, "terminal.log")).Length);
+    }
+
+    [Fact]
     public async Task HandleClear_ArchivesHistoryAndResets()
     {
         var svc = New();

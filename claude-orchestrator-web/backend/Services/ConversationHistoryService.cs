@@ -198,7 +198,12 @@ public class ConversationHistoryService
     public TerminalLogWriter? CreateTerminalLogWriter(Agent agent)
     {
         if (!Options.RawTerminalLog) return null;
-        try { return new TerminalLogWriter(Path.Combine(ResolveAgentDir(agent), "terminal.log")); }
+        try
+        {
+            return new TerminalLogWriter(
+                Path.Combine(ResolveAgentDir(agent), "terminal.log"),
+                maxBytes: Options.TerminalLogMaxMB * 1024L * 1024);
+        }
         catch { return null; }
     }
 
